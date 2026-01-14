@@ -4,7 +4,7 @@ import { UserTable } from './User';
 import { text } from 'drizzle-orm/pg-core';
 import { integer } from 'drizzle-orm/pg-core';
 import { applicationStageEnum } from '@/utils/enums';
-import { createdAt, updatedAt } from '@/utils/helpers';
+import { createdAtCol, updatedAtCol } from '@/utils/helpers';
 import { primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -22,8 +22,8 @@ export const JobListingApplicationTable = pgTable(
     coverLetter: text(),
     rating: integer(),
     stage: applicationStageEnum().notNull().default('applied'),
-    createdAt,
-    updatedAt,
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
   },
   (table) => [primaryKey({ columns: [table.jobListingId, table.userId] })],
 );

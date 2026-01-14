@@ -1,7 +1,7 @@
-import { createdAt, id, updatedAt } from '@/utils/helpers';
+import { createdAtCol, idCol, updatedAtCol } from '@/utils/helpers';
 import { uuid } from 'drizzle-orm/pg-core';
 import { pgTable } from 'drizzle-orm/pg-core';
-import { OrganizationTable } from './Organization';
+import { OrganizationTable } from './Organizations';
 import { varchar } from 'drizzle-orm/pg-core';
 import { text } from 'drizzle-orm/pg-core';
 import { integer } from 'drizzle-orm/pg-core';
@@ -21,7 +21,7 @@ import { JobListingApplicationTable } from './JobListingApplication';
 export const JobListingTable = pgTable(
   'job-listings',
   {
-    id,
+    id: idCol(),
     organizationId: uuid('organization_id')
       .references(() => OrganizationTable.id, {
         onDelete: 'cascade',
@@ -41,8 +41,8 @@ export const JobListingTable = pgTable(
     status: jobListingStatusEnum().notNull().default('draft'),
     type: jobListingTypeEnum().notNull(),
     postedAt: timestamp({ withTimezone: true }),
-    createdAt,
-    updatedAt,
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
   },
   (table) => [index().on(table.stateAbbreviation)],
 );

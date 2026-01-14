@@ -1,5 +1,5 @@
 import { pgTable } from 'drizzle-orm/pg-core';
-import { createdAt, id, updatedAt } from '@/utils/helpers';
+import { createdAtCol, idCol, updatedAtCol } from '@/utils/helpers';
 import { varchar } from 'drizzle-orm/pg-core';
 import { timestamp } from 'drizzle-orm/pg-core';
 import { integer } from 'drizzle-orm/pg-core';
@@ -10,7 +10,7 @@ import { UserResumeTable } from './UserResume';
 import { OrganizationUserSettingsTable } from './OrganizationUserSettings';
 
 export const UserTable = pgTable('users', {
-  id,
+  id: idCol(),
   username: varchar('username').notNull(),
   imageUrl: varchar('image_url').notNull(),
   password: varchar().notNull(),
@@ -29,8 +29,8 @@ export const UserTable = pgTable('users', {
   verificationExpires: timestamp('verification_expires', {
     withTimezone: true,
   }),
-  createdAt,
-  updatedAt,
+  createdAt: createdAtCol(),
+  updatedAt: updatedAtCol(),
 });
 
 export const userRelations = relations(UserTable, ({ one, many }) => ({

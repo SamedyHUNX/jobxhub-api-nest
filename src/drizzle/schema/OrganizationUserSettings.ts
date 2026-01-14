@@ -1,11 +1,11 @@
 import { uuid } from 'drizzle-orm/pg-core';
 import { pgTable } from 'drizzle-orm/pg-core';
 import { UserTable } from './User';
-import { OrganizationTable } from './Organization';
+import { OrganizationTable } from './Organizations';
 import { varchar } from 'drizzle-orm/pg-core';
 import { boolean } from 'drizzle-orm/pg-core';
 import { integer } from 'drizzle-orm/pg-core';
-import { createdAt, updatedAt } from '@/utils/helpers';
+import { createdAtCol, updatedAtCol } from '@/utils/helpers';
 import { primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -14,10 +14,10 @@ export const OrganizationUserSettingsTable = pgTable(
   {
     userId: uuid('user_id')
       .notNull()
-      .references(() => UserTable.id),
+      .references(() => UserTable.id, { onDelete: 'cascade' }),
     organizationId: uuid('organization_id')
       .notNull()
-      .references(() => OrganizationTable.id),
+      .references(() => OrganizationTable.id, { onDelete: 'cascade' }),
     role: varchar('role').notNull().default('Member'),
     newApplicationEmailNotifications: boolean(
       'new_application_email_notifications',
@@ -25,8 +25,8 @@ export const OrganizationUserSettingsTable = pgTable(
       .notNull()
       .default(false),
     minimumRating: integer('minimum_rating'),
-    createdAt,
-    updatedAt,
+    createdAt: createdAtCol(),
+    updatedAt: updatedAtCol(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.organizationId] })],
 );
