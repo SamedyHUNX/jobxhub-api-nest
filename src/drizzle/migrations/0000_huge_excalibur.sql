@@ -1,3 +1,9 @@
+CREATE TYPE "public"."job_listing_applications_state" AS ENUM('denied', 'applied', 'interviewed', 'hired');--> statement-breakpoint
+CREATE TYPE "public"."job_listings_experience_level" AS ENUM('junior', 'mid', 'senior', 'lead', 'ceo', 'director');--> statement-breakpoint
+CREATE TYPE "public"."job_listings_status" AS ENUM('draft', 'published', 'delisted');--> statement-breakpoint
+CREATE TYPE "public"."job_listings_type" AS ENUM('internship', 'part-time', 'full-time', 'freelance', 'contract');--> statement-breakpoint
+CREATE TYPE "public"."job_listings_location_requirement" AS ENUM('in-office', 'hybrid', 'remote');--> statement-breakpoint
+CREATE TYPE "public"."job_listings_wage_interval" AS ENUM('hourly', 'yearly', 'monthly');--> statement-breakpoint
 CREATE TABLE "users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"username" varchar NOT NULL,

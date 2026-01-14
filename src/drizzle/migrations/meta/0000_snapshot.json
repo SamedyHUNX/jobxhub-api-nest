@@ -1,5 +1,5 @@
 {
-  "id": "cb691216-8c9e-4386-af52-f3a47aba4f4e",
+  "id": "1f8557bf-58ca-47e6-a9ac-05a00e9bfe18",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -719,7 +719,68 @@
       "isRLSEnabled": false
     }
   },
-  "enums": {},
+  "enums": {
+    "public.job_listing_applications_state": {
+      "name": "job_listing_applications_state",
+      "schema": "public",
+      "values": [
+        "denied",
+        "applied",
+        "interviewed",
+        "hired"
+      ]
+    },
+    "public.job_listings_experience_level": {
+      "name": "job_listings_experience_level",
+      "schema": "public",
+      "values": [
+        "junior",
+        "mid",
+        "senior",
+        "lead",
+        "ceo",
+        "director"
+      ]
+    },
+    "public.job_listings_status": {
+      "name": "job_listings_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "published",
+        "delisted"
+      ]
+    },
+    "public.job_listings_type": {
+      "name": "job_listings_type",
+      "schema": "public",
+      "values": [
+        "internship",
+        "part-time",
+        "full-time",
+        "freelance",
+        "contract"
+      ]
+    },
+    "public.job_listings_location_requirement": {
+      "name": "job_listings_location_requirement",
+      "schema": "public",
+      "values": [
+        "in-office",
+        "hybrid",
+        "remote"
+      ]
+    },
+    "public.job_listings_wage_interval": {
+      "name": "job_listings_wage_interval",
+      "schema": "public",
+      "values": [
+        "hourly",
+        "yearly",
+        "monthly"
+      ]
+    }
+  },
   "schemas": {},
   "sequences": {},
   "roles": {},
