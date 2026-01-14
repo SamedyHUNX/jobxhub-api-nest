@@ -1,4 +1,4 @@
-// Export all enums first (required for Drizzle migrations)
+// Export all enums (required for Drizzle migrations)
 export * from '@/utils/enums';
 
 // Export all tables and relations
