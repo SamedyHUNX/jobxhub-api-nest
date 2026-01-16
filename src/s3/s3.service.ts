@@ -4,9 +4,11 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2Command,
+  ListObjectsV2CommandOutput,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Readable } from 'stream';
 
 @Injectable()
 export class S3Service {
@@ -34,6 +36,12 @@ export class S3Service {
         secretAccessKey,
       },
     };
+
+    if (isR2 && !process.env.R2_ACCOUNT_ID) {
+      throw new Error(
+        'R2_ACCOUNT_ID is required when using Cloudflare R2 storage',
+      );
+    }
 
     // R2 endpoint if using Cloudflare R2
     if (isR2 && process.env.R2_ACCOUNT_ID) {
@@ -65,20 +73,14 @@ export class S3Service {
 
   // Get file from S3
   async getFile(key: string): Promise<Buffer> {
-    const command = new GetObjectCommand({
-      Bucket: this.bucketName,
-      Key: key,
-    });
-
+    const command = new GetObjectCommand({ Bucket: this.bucketName, Key: key });
     const response = await this.s3Client.send(command);
-    const stream = response.Body as any;
-
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-      stream.on('error', reject);
-      stream.on('end', () => resolve(Buffer.concat(chunks)));
-    });
+    const stream = response.Body as Readable;
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
   }
 
   // Generate presigned URL for download
@@ -106,16 +108,26 @@ export class S3Service {
 
   // List files in S3 bucket
   async listFiles(prefix?: string): Promise<string[]> {
-    const command = new ListObjectsV2Command({
-      Bucket: this.bucketName,
-      Prefix: prefix,
-    });
+    const keys: string[] = [];
+    let continuationToken: string | undefined = undefined;
 
-    const response = await this.s3Client.send(command);
-    return (
-      response.Contents?.map((item) => item.Key).filter(
-        (key): key is string => key !== undefined,
-      ) || []
-    );
+    do {
+      const command = new ListObjectsV2Command({
+        Bucket: this.bucketName,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      });
+
+      const response = (await this.s3Client.send(
+        command,
+      )) as ListObjectsV2CommandOutput;
+      response.Contents?.forEach((item) => {
+        if (item.Key) keys.push(item.Key);
+      });
+
+      continuationToken = response.NextContinuationToken;
+    } while (continuationToken);
+
+    return keys;
   }
 }
