@@ -7,6 +7,7 @@ import {
   UploadedFile,
   Param,
   Res,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { S3Service } from './s3.service';
@@ -17,8 +18,13 @@ export class S3Controller {
   constructor(private readonly s3Service: S3Service) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: parseInt(process.env.R2_FILE_SIZE_LIMIT!) },
+    }),
+  )
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('file is required');
     const key = await this.s3Service.uploadFile(file);
     const url = await this.s3Service.getPresignedUrl(key);
 

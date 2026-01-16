@@ -5,11 +5,12 @@ dotenv.config();
 
 const isProduction = process.env.NODE_ENV === 'production';
 const getRequired = (key: string, fallback?: string): string => {
-  const value = process.env[key] || fallback;
-  if (!value && isProduction) {
+  const value = process.env[key];
+  if (value) return value;
+  if (isProduction) {
     throw new Error(`Missing required env var: ${key}`);
   }
-  return value || '';
+  return fallback ?? '';
 };
 
 export default defineConfig({
