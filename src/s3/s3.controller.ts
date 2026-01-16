@@ -13,6 +13,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { S3Service } from './s3.service';
 import type { Response } from 'express';
 
+const fileSizeLimit = Number(process.env.R2_FILE_SIZE_LIMIT);
+if (!Number.isFinite(fileSizeLimit) || fileSizeLimit <= 0) {
+  throw new Error('R2_FILE_SIZE_LIMIT must be a positive number of bytes');
+}
+
 @Controller('upload')
 export class S3Controller {
   constructor(private readonly s3Service: S3Service) {}
@@ -20,7 +25,7 @@ export class S3Controller {
   @Post()
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: parseInt(process.env.R2_FILE_SIZE_LIMIT!) },
+      limits: { fileSize: fileSizeLimit },
     }),
   )
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
