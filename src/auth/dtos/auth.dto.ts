@@ -6,6 +6,7 @@ import {
   Matches,
   MinLength,
 } from 'class-validator';
+import { Match } from '../../utils/decorators';
 
 export class SignUpDto {
   @IsString()
@@ -26,7 +27,12 @@ export class SignUpDto {
   })
   password: string;
 
-  @IsString() @IsNotEmpty() @MinLength(6) confirmPassword: string;
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  @Match('password', { message: 'Passwords do not match' })
+  confirmPassword: string;
+
   @IsString() @IsNotEmpty() firstName: string;
   @IsString() @IsNotEmpty() lastName: string;
   @IsDateString() @IsNotEmpty() dateOfBirth: string;
@@ -47,6 +53,7 @@ export class RequestPasswordResetDto {
 
 export class ResetPasswordDto {
   @IsString()
+  @IsNotEmpty()
   token: string;
 
   @IsString()
@@ -58,6 +65,8 @@ export class ResetPasswordDto {
   newPassword: string;
 
   @IsString()
+  @IsNotEmpty()
   @MinLength(6)
+  @Match('newPassword', { message: 'Passwords do not match' })
   confirmPassword: string;
 }

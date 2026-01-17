@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   S3Client,
   GetObjectCommand,
@@ -56,13 +56,17 @@ export class S3Service {
   async uploadFile(file: Express.Multer.File, key?: string): Promise<string> {
     const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileKey = key || `${Date.now()}-${sanitizedName}`;
+    const body = file.buffer ?? file.stream;
+    if (!body) {
+      throw new BadRequestException('Uploaded file stream is missing');
+    }
 
     const upload = new Upload({
       client: this.s3Client,
       params: {
         Bucket: this.bucketName,
         Key: fileKey,
-        Body: file.buffer,
+        Body: body,
         ContentType: file.mimetype,
       },
     });
@@ -118,9 +122,8 @@ export class S3Service {
         ContinuationToken: continuationToken,
       });
 
-      const response = (await this.s3Client.send(
-        command,
-      )) as ListObjectsV2CommandOutput;
+      const response: ListObjectsV2CommandOutput =
+        await this.s3Client.send(command);
       response.Contents?.forEach((item) => {
         if (item.Key) keys.push(item.Key);
       });
