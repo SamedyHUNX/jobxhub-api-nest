@@ -14,7 +14,7 @@ CREATE TABLE "users" (
 	"last_name" varchar NOT NULL,
 	"full_name" varchar,
 	"reset_password_token" varchar,
-	"reset_password_expires" timestamp,
+	"reset_password_expires" timestamp with time zone,
 	"token_version" integer DEFAULT 0 NOT NULL,
 	"is_banned" boolean DEFAULT false,
 	"is_verified" boolean DEFAULT false,
