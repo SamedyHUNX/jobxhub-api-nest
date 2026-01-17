@@ -40,14 +40,17 @@ export class SignUpDto {
 
 export class SignInDto {
   @IsEmail()
+  @IsNotEmpty()
   email: string;
 
   @IsString()
+  @IsNotEmpty()
   password: string;
 }
 
 export class RequestPasswordResetDto {
   @IsEmail()
+  @IsNotEmpty()
   email: string;
 }
 
@@ -57,6 +60,7 @@ export class ResetPasswordDto {
   token: string;
 
   @IsString()
+  @IsNotEmpty()
   @MinLength(6)
   @Matches(/^(?=.*[A-Za-z])(?=.*[^A-Za-z0-9]).*$/, {
     message:
