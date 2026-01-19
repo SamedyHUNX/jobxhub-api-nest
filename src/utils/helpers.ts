@@ -12,11 +12,11 @@ export const updatedAtCol = () =>
     .defaultNow()
     .$onUpdate(() => new Date());
 
-export function capitalizeString(string: String) {
-  if (typeof string !== 'string' || string.length === 0) {
+export function capitalizeString(str: string): string {
+  if (!str || str.length === 0) {
     return '';
   }
-  return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
 export async function hashPassword(password: string): Promise<string> {

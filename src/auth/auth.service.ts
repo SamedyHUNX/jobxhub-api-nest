@@ -4,6 +4,7 @@ import { S3Service } from '@/s3/s3.service';
 import { catchAsync } from '@/utils/catch-async';
 import { ResponseCode, ResponseHelper } from '@/utils/response-helper';
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
@@ -11,23 +12,33 @@ import {
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Redis } from 'ioredis';
 import { SignUpDto } from './dtos/auth.dto';
 import { eq, or } from 'drizzle-orm';
 import { inngest } from '@/inngest/inngest.client';
 import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import { UserTable } from '@/drizzle/schema';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AppService.name);
   constructor(
     private jwtService: JwtService,
-    @Inject('REDIS_CLIENT') private readonly redisService: Redis,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private dbService: DrizzleService,
     private s3Service: S3Service,
   ) {}
+
+  private get redisServer() {
+    if (!this.cacheManager) {
+      this.logger.error(`Redis server is down at ${new Date().toISOString()}`);
+      throw new InternalServerErrorException(
+        ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
+      );
+    }
+    return this.cacheManager;
+  }
 
   private getTimestamp(): string {
     return new Date().toISOString();
@@ -36,7 +47,7 @@ export class AuthService {
   private get dbServer() {
     if (!this.dbService.db) {
       this.logger.error(
-        `Database connection not established at ${this.getTimestamp}`,
+        `Database connection not established at ${this.getTimestamp()}`,
       );
       throw new InternalServerErrorException(
         ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
@@ -45,19 +56,9 @@ export class AuthService {
     return this.dbService.db;
   }
 
-  private get redisServer() {
-    if (!this.redisService) {
-      this.logger.error(`Redis server is down at ${new Date().toISOString()}`);
-      throw new InternalServerErrorException(
-        ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
-      );
-    }
-    return this.redisService;
-  }
-
   private get s3Server() {
     if (!this.s3Service) {
-      this.logger.error(`S3 service is down at ${this.getTimestamp}`);
+      this.logger.error(`S3 service is down at ${this.getTimestamp()}`);
       throw new InternalServerErrorException(
         ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
       );
@@ -97,9 +98,8 @@ export class AuthService {
 
       for (const [key, value] of Object.entries(requiredFields)) {
         if (!value) {
-          const message = `${key.charAt(0).toUpperCase() + key.slice(1)} is required`;
           this.logger.error(`Missing ${key}`);
-          throw new ConflictException(
+          throw new BadRequestException(
             ResponseHelper.error(ResponseCode.MISSING_FIELDS, key),
           );
         }
@@ -114,9 +114,7 @@ export class AuthService {
 
       if (existingUser.length > 0) {
         if (existingUser[0].email === email) {
-          this.logger.error(
-            `User with email ${email} trying to create an account using existing email!`,
-          );
+          this.logger.warn('Signup attempt with existing email');
           throw new ConflictException(
             ResponseHelper.error(ResponseCode.EXISTING_EMAIL),
           );
@@ -134,8 +132,11 @@ export class AuthService {
         );
       }
 
+      // Sanitize filename to prevent path traversal
+      const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+
       // Upload image to S3
-      const imageKey = `users/avatars/${Date.now()}-${file.originalname}`;
+      const imageKey = `users/avatars/${Date.now()}-${sanitizedName}`;
       await this.s3Server.uploadFile(file, imageKey);
 
       // Get the S3 URL (public or presigned)
@@ -209,6 +210,6 @@ export class AuthService {
       }
     },
     this.logger,
-    `Failed to sign up user at ${this.getTimestamp()}`,
+    `Failed to sign up user`,
   );
 }

@@ -11,13 +11,13 @@ import { OrganizationUserSettingsTable } from './OrganizationUserSettings';
 
 export const UserTable = pgTable('users', {
   id: idCol(),
-  username: varchar('username').notNull(),
+  username: varchar('username').notNull().unique(),
   imageUrl: varchar('image_url').notNull(),
   password: varchar().notNull(),
   email: varchar().notNull().unique(),
   firstName: varchar('first_name').notNull(),
   lastName: varchar('last_name').notNull(),
-  dateOfBirth: timestamp('date_of_birth', { withTimezone: true }),
+  dateOfBirth: timestamp('date_of_birth', { withTimezone: true }).notNull(),
   resetPasswordToken: varchar('reset_password_token'),
   resetPasswordExpires: timestamp('reset_password_expires'),
   tokenVersion: integer('token_version').notNull().default(0),
