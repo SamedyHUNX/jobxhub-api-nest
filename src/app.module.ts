@@ -5,9 +5,10 @@ import { AuthModule } from './auth/auth.module';
 import { S3Module } from './s3/s3.module';
 import { InngestModule } from './inngest/inngest.module';
 import { RedisModule } from './redis/redis.module';
+import { DrizzleModule } from './drizzle/drizzle.module';
 
 @Module({
-  imports: [AuthModule, S3Module, InngestModule, RedisModule],
+  imports: [AuthModule, S3Module, InngestModule, RedisModule, DrizzleModule],
   controllers: [AppController],
   providers: [AppService],
 })
