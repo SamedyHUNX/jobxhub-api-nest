@@ -84,7 +84,8 @@ export class AuthService {
       file: Express.Multer.File,
       acceptLanguage: string,
     ) => {
-      const { username, password, email, firstName, lastName } = data;
+      const { username, password, email, firstName, lastName, dateOfBirth } =
+        data;
 
       // Validate required fields from DTO
       const requiredFields = {
@@ -94,6 +95,7 @@ export class AuthService {
         firstName,
         lastName,
         file,
+        dateOfBirth,
       };
 
       for (const [key, value] of Object.entries(requiredFields)) {
@@ -168,6 +170,7 @@ export class AuthService {
             email,
             firstName: capitalizedFirstName,
             lastName: capitalizedLastName,
+            dateOfBirth: new Date(dateOfBirth),
             password: hashedPassword,
             imageUrl,
             userRole: 'USER', // Explicity set the userRole to 'USER' for security reason

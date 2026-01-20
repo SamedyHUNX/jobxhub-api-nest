@@ -1,9 +1,11 @@
-import { pgTable } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  varchar,
+  timestamp,
+  integer,
+  boolean,
+} from 'drizzle-orm/pg-core';
 import { createdAtCol, idCol, updatedAtCol } from '@/utils/helpers';
-import { varchar } from 'drizzle-orm/pg-core';
-import { timestamp } from 'drizzle-orm/pg-core';
-import { integer } from 'drizzle-orm/pg-core';
-import { boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { UserNotificationSettingsTable } from './UserNotificationSettings';
 import { UserResumeTable } from './UserResume';
