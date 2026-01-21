@@ -1,26 +1,22 @@
-import { All, Controller, Req, Res } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import { All, Controller, Module, Req, Res } from '@nestjs/common';
 import { serve } from 'inngest/express';
 import { InngestClientService } from './inngest.service';
-// import { createUser, forgotPassword } from './functions/auth';
+import { UserFunctionsService } from './functions/functions.service';
 
-@Controller('api/inngest')
+@Controller('inngest')
 export class InngestController {
-  private inngestHandler: ReturnType<typeof serve>;
-
-  constructor(private readonly inngestClientService: InngestClientService) {
-    this.inngestHandler = serve({
-      client: this.inngestClientService.inngest,
-      functions: [
-        // createUser,
-        // forgotPassword,
-        // more functions
-      ],
-    });
-  }
+  constructor(
+    private inngestClientService: InngestClientService,
+    private userFunctionsService: UserFunctionsService,
+  ) {}
 
   @All()
-  async handleInngest(@Req() req: Request, @Res() res: Response) {
-    await this.inngestHandler(req, res);
+  handleInngest(@Req() req, @Res() res) {
+    const handler = serve({
+      client: this.inngestClientService.inngest,
+      functions: this.userFunctionsService.getFunctions(),
+    });
+
+    return handler(req, res);
   }
 }
