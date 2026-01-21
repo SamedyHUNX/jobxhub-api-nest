@@ -26,13 +26,13 @@ import { ConfigService } from '@/config/config.service';
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   constructor(
-    private jwtService: JwtService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private jwtService: JwtService,
     private dbService: DrizzleService,
     private s3Service: S3Service,
     private inngestService: InngestClientService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   private get redisServer() {
     if (!this.cacheManager) {
@@ -143,7 +143,7 @@ export class AuthService {
       }
 
       if (!imageFile || !imageFile.originalname) {
-        throw new ConflictException(
+        throw new BadRequestException(
           ResponseHelper.error(ResponseCode.MISSING_PHOTO),
         );
       }
@@ -189,7 +189,14 @@ export class AuthService {
         } = await this.generateAndHashToken(60 * 24); // 24 hours expiration
 
         // Send email with reset link
-        const verificationUrl = `${process.env.FRONTEND_URL}/${acceptLanguage}/auth/verify-email?token=${verificationToken}`;
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+        const locale = acceptLanguage || 'en';
+        if (!frontendUrl) {
+          throw new InternalServerErrorException(
+            ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
+          );
+        }
+        const verificationUrl = `${frontendUrl}/${locale}/auth/verify-email?token=${verificationToken}`;
 
         // Create user
         const [user] = await this.dbServer
@@ -220,7 +227,7 @@ export class AuthService {
               lastName: user.lastName,
               imageUrl: user.imageUrl,
               verificationUrl,
-              acceptLanguage: acceptLanguage || 'en',
+              acceptLanguage: locale,
             },
           });
         } catch (err: any) {
