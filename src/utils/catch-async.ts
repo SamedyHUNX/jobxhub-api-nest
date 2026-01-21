@@ -36,12 +36,13 @@ export function catchAsync<T>(
 
       // Log unexpected errors and return a standardized error response
       logger.error(`${errorMessage}: ${error?.message ?? 'Unknown error'}`);
+      const isProd = process.env.NODE_ENV === 'production';
       throw new InternalServerErrorException(
         ResponseHelper.error(
           ResponseCode.SERVICE_UNAVAILABLE,
           undefined,
-          `${errorMessage} — ${error?.message ?? 'Unknown error'}`,
-          process.env.NODE_ENV === 'production' ? undefined : error?.stack,
+          isProd ? undefined : { message: error?.message, stack: error?.stack },
+          errorMessage,
         ),
       );
     }

@@ -23,9 +23,13 @@ export default defineConfig({
     user: getRequired('DB_USER', 'postgres'),
     password: getRequired('DB_PASSWORD', 'postgres'),
     database: getRequired('DB_NAME', 'mydb'),
-    ssl:
-      process.env.DB_SSL === 'true'
+    ssl: (() => {
+      if (isProduction && process.env.DB_SSL !== 'true') {
+        throw new Error('DB_SSL must be "true" in production');
+      }
+      return process.env.DB_SSL === 'true'
         ? { rejectUnauthorized: isProduction }
-        : false,
+        : false;
+    })(),
   },
 });
