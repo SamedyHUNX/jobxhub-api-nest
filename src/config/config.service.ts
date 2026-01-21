@@ -91,7 +91,7 @@ export class ConfigService {
     return this.configService.getOrThrow<string>('AWS_SECRET_ACCESS_KEY');
   }
 
-  get s3BucketName(): string {
+  get awsS3BucketName(): string {
     return this.configService.getOrThrow<string>('S3_BUCKET_NAME');
   }
 

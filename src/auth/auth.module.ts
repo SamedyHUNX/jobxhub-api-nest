@@ -7,17 +7,19 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt/jwt.strategy';
 import { InngestModule } from '@/inngest/inngest.module';
 import { ConfigService } from '@/config/config.service';
+import { AppConfigModule } from '@/config/config.module';
 @Module({
   imports: [
     S3Module,
     PassportModule,
     InngestModule,
+    AppConfigModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
-        const secret = configService.get<string>('JWT_SECRET');
+        const secret = configService.jwtSecret;
         if (!secret) throw new Error('JWT_SECRET is required');
-        const expiresInRaw = configService.get<string>('JWT_EXPIRES_IN');
+        const expiresInRaw = configService.jwtExpiresIn;
         const expiresInParsed = Number(expiresInRaw);
         const expiresIn = Number.isFinite(expiresInParsed)
           ? expiresInParsed
