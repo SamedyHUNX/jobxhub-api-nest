@@ -10,10 +10,11 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SignUpDto } from './dtos/auth.dto';
-import { eq, or } from 'drizzle-orm';
+import { and, eq, gt, or } from 'drizzle-orm';
 import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import { UserTable } from '@/drizzle/schema';
@@ -229,5 +230,49 @@ export class AuthService {
     },
     this.logger,
     `Failed to sign up user`,
+  );
+
+  verifyEmail = catchAsync(
+    async (token: string) => {
+      // Hash the token from URL to compare with stored hash
+      const hashedToken = crypto
+        .createHash('sha256')
+        .update(token)
+        .digest('hex');
+
+      // Find user by verification token and check expiration
+      const [user] = await this.dbServer
+        .select()
+        .from(UserTable)
+        .where(
+          and(
+            eq(UserTable.verificationToken, hashedToken),
+            gt(UserTable.verificationExpires, new Date()),
+          ),
+        )
+        .limit(1);
+
+      if (!user) {
+        this.logger.error('Invalid or expired email verification token used');
+        throw new UnauthorizedException(
+          ResponseHelper.error(ResponseCode.INVALID_TOKEN),
+        );
+      }
+
+      // Update user's verified status and clear verification token fields
+      await this.dbServer
+        .update(UserTable)
+        .set({
+          isVerified: true,
+          verificationToken: null,
+          verificationExpires: null,
+        })
+        .where(eq(UserTable.id, user.id));
+
+      this.logger.log(`Email successfully verified for user ID: ${user.id}`);
+      return ResponseHelper.success(ResponseCode.EMAIL_VERIFIED);
+    },
+    this.logger,
+    'Failed to verify email',
   );
 }
