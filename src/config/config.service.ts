@@ -10,19 +10,19 @@ export class ConfigService {
     return this.configService.getOrThrow<string>('DATABASE_URL');
   }
   get dbHost(): string {
-    return this.configService.getOrThrow<string>('DB_HOST');
+    return this.configService.get<string>('DB_HOST') ?? 'localhost';
   }
   get dbPort(): string {
-    return this.configService.getOrThrow<string>('DB_PORT');
+    return this.configService.get<string>('DB_PORT') ?? '5432';
   }
   get dbUser(): string {
-    return this.configService.getOrThrow<string>('DB_USER');
+    return this.configService.get<string>('DB_USER') ?? 'postgres';
   }
   get dbPassword(): string {
-    return this.configService.getOrThrow<string>('DB_PASSWORD');
+    return this.configService.get<string>('DB_PASSWORD') ?? 'postgres';
   }
   get dbName(): string {
-    return this.configService.getOrThrow<string>('DB_NAME');
+    return this.configService.get<string>('DB_NAME') ?? 'mydb';
   }
 
   // JWT

@@ -1,8 +1,17 @@
+import { Injectable } from '@nestjs/common';
 import { EventSchemas, Inngest } from 'inngest';
 import { Events } from './types/events.type';
+import { ConfigService } from '../config/config.service';
 
-export const inngest = new Inngest({
-  id: 'jobxhub',
-  schemas: new EventSchemas().fromRecord<Events>(),
-  eventKey: process.env.INNGEST_EVENT_KEY,
-});
+@Injectable()
+export class InngestClientService {
+  inngest: Inngest;
+
+  constructor(private configService: ConfigService) {
+    this.inngest = new Inngest({
+      id: 'jobxhub',
+      schemas: new EventSchemas().fromRecord<Events>(),
+      eventKey: this.configService.inngestEventKey,
+    });
+  }
+}
