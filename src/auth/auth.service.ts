@@ -19,6 +19,7 @@ import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import { UserTable } from '@/drizzle/schema';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 
 @Injectable()
 export class AuthService {
