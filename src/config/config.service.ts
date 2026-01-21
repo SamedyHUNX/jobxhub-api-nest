@@ -25,6 +25,8 @@ export class ConfigService {
     return this.configService.get<string>('DB_NAME') ?? 'mydb';
   }
 
+  //////////////////////////////////////////////////////////////////////////////////
+
   // JWT
   get jwtSecret(): string {
     return this.configService.getOrThrow<string>('JWT_SECRET');
@@ -33,6 +35,8 @@ export class ConfigService {
   get jwtExpiresIn(): string {
     return this.configService.get<string>('JWT_EXPIRES_IN') ?? '7d';
   }
+
+  //////////////////////////////////////////////////////////////////////////////////
 
   // Redis
   get redisHost(): string {
@@ -44,6 +48,35 @@ export class ConfigService {
   get redisPw(): string {
     return this.configService.getOrThrow<string>('REDIS_PW');
   }
+
+  //////////////////////////////////////////////////////////////////////////////////
+
+  // R2
+  get storageProvider(): string {
+    return this.configService.getOrThrow<string>('STORAGE_PROVIDER');
+  }
+
+  get r2PublicDomain(): string {
+    return this.configService.getOrThrow<string>('R2_PUBLIC_DOMAIN');
+  }
+
+  get r2AccessKeyId(): string {
+    return this.configService.getOrThrow<string>('R2_ACCESS_KEY_ID');
+  }
+
+  get r2SecretAccessKey(): string {
+    return this.configService.getOrThrow<string>('R2_SECRET_ACCESS_KEY');
+  }
+
+  get r2BucketName(): string {
+    return this.configService.getOrThrow<string>('R2_BUCKET_NAME');
+  }
+
+  get r2AccountId(): string {
+    return this.configService.getOrThrow<string>('R2_ACCOUNT_ID');
+  }
+
+  //////////////////////////////////////////////////////////////////////////////////
 
   // AWS S3
   get awsRegion(): string {
@@ -62,7 +95,17 @@ export class ConfigService {
     return this.configService.getOrThrow<string>('S3_BUCKET_NAME');
   }
 
+  get s3PublicDomain(): string {
+    return this.configService.getOrThrow<string>('S3_PUBLIC_DOMAIN');
+  }
+
+  //////////////////////////////////////////////////////////////////////////////////
+
   // Application
+  get clientUrl(): string {
+    return this.configService.getOrThrow<string>('CLIENT_URL');
+  }
+
   get nodeEnv(): string {
     return this.configService.get<string>('NODE_ENV') ?? 'development';
   }
@@ -79,6 +122,8 @@ export class ConfigService {
     return this.nodeEnv === 'production';
   }
 
+  //////////////////////////////////////////////////////////////////////////////////
+
   // Inngest
   get inngestEventKey(): string {
     return this.configService.getOrThrow<string>('INNGEST_EVENT_KEY');
@@ -87,6 +132,8 @@ export class ConfigService {
   get inngestSigningKey(): string {
     return this.configService.getOrThrow<string>('INNGEST_SIGNING_KEY');
   }
+
+  //////////////////////////////////////////////////////////////////////////////////
 
   // Email
   get smtpHost(): string {

@@ -172,12 +172,11 @@ export class AuthService {
       await this.s3Server.uploadFile(imageFile, imageKey);
 
       // Get the S3 URL (public or presigned)
-      const storageProvider =
-        this.configService.get<string>('STORAGE_PROVIDER') ?? 's3';
+      const storageProvider = this.configService.storageProvider ?? 's3';
       const publicDomain =
         storageProvider === 'r2'
-          ? this.configService.get<string>('R2_PUBLIC_DOMAIN')
-          : this.configService.get<string>('S3_PUBLIC_DOMAIN');
+          ? this.configService.r2PublicDomain
+          : this.configService.s3PublicDomain;
 
       if (!publicDomain) {
         throw new InternalServerErrorException(
@@ -202,7 +201,7 @@ export class AuthService {
         } = await this.generateAndHashToken(60 * 24); // 24 hours expiration
 
         // Send email with reset link
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+        const frontendUrl = this.configService.clientUrl;
         const locale = acceptLanguage || 'en';
         if (!frontendUrl) {
           throw new InternalServerErrorException(
