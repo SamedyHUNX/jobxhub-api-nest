@@ -16,7 +16,11 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
   signUp(
     @Body() data: SignUpDto,
     @UploadedFile(new ImageValidationPipe()) file: Express.Multer.File,

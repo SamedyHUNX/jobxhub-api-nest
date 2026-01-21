@@ -14,6 +14,7 @@ import { S3Service } from './s3.service';
 import type { Response } from 'express';
 
 const fileSizeLimit = Number(process.env.R2_FILE_SIZE_LIMIT);
+console.log(fileSizeLimit);
 if (!Number.isFinite(fileSizeLimit) || fileSizeLimit <= 0) {
   throw new Error('R2_FILE_SIZE_LIMIT must be a positive number of bytes');
 }

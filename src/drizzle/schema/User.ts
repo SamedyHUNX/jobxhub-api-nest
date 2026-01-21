@@ -1,9 +1,11 @@
-import { pgTable } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  varchar,
+  timestamp,
+  integer,
+  boolean,
+} from 'drizzle-orm/pg-core';
 import { createdAtCol, idCol, updatedAtCol } from '@/utils/helpers';
-import { varchar } from 'drizzle-orm/pg-core';
-import { timestamp } from 'drizzle-orm/pg-core';
-import { integer } from 'drizzle-orm/pg-core';
-import { boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { UserNotificationSettingsTable } from './UserNotificationSettings';
 import { UserResumeTable } from './UserResume';
@@ -11,13 +13,13 @@ import { OrganizationUserSettingsTable } from './OrganizationUserSettings';
 
 export const UserTable = pgTable('users', {
   id: idCol(),
-  username: varchar('username').notNull(),
+  username: varchar('username').notNull().unique(),
   imageUrl: varchar('image_url').notNull(),
   password: varchar().notNull(),
   email: varchar().notNull().unique(),
   firstName: varchar('first_name').notNull(),
   lastName: varchar('last_name').notNull(),
-  dateOfBirth: timestamp('date_of_birth', { withTimezone: true }),
+  dateOfBirth: timestamp('date_of_birth', { withTimezone: true }).notNull(),
   resetPasswordToken: varchar('reset_password_token'),
   resetPasswordExpires: timestamp('reset_password_expires'),
   tokenVersion: integer('token_version').notNull().default(0),

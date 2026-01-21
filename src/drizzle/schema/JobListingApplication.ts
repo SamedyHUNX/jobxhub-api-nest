@@ -11,15 +11,15 @@ import { relations } from 'drizzle-orm';
 export const JobListingApplicationTable = pgTable(
   'job_listing_applications',
   {
-    jobListingId: uuid()
+    jobListingId: uuid('job_listing_id')
       .references(() => JobListingTable.id, {
         onDelete: 'cascade',
       })
       .notNull(),
-    userId: uuid()
+    userId: uuid('user_id')
       .references(() => UserTable.id, { onDelete: 'cascade' })
       .notNull(),
-    coverLetter: text(),
+    coverLetter: text('cover_letter'),
     rating: integer(),
     stage: applicationStageEnum().notNull().default('applied'),
     createdAt: createdAtCol(),
