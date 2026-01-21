@@ -32,7 +32,7 @@ export class AuthService {
     private s3Service: S3Service,
     private inngestService: InngestClientService,
     private configService: ConfigService,
-  ) { }
+  ) {}
 
   private get redisServer() {
     if (!this.cacheManager) {
