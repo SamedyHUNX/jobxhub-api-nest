@@ -12,10 +12,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { SignUpDto } from './dtos/auth.dto';
+import { SignInDto, SignUpDto } from './dtos/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
 import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
@@ -92,6 +93,18 @@ export class AuthService {
     return { token, hashedToken, expiresAt };
   }
 
+  private async cacheUser(user: any, ttl: number = 900) {
+    const cacheKey = `user:email:${user.email}`;
+    await this.redisServer.set(cacheKey, JSON.stringify(user), ttl);
+  }
+
+  private async getCachedUser(email: string) {
+    const cacheKey = `user:email:${email}`;
+    const cached = await this.redisServer.get<string>(cacheKey);
+    return cached ? JSON.parse(cached) : null;
+  }
+
+  // Sign up function
   signUp = catchAsync(
     async (
       data: SignUpDto,
@@ -258,6 +271,7 @@ export class AuthService {
     `Failed to sign up user`,
   );
 
+  // Verify email function
   verifyEmail = catchAsync(
     async (token: string) => {
       // Hash the token from URL to compare with stored hash
@@ -300,5 +314,108 @@ export class AuthService {
     },
     this.logger,
     'Failed to verify email',
+  );
+
+  // SignIn function
+  signIn = catchAsync(
+    async (data: SignInDto) => {
+      const { email, password } = data;
+
+      if (!email || !password) {
+        this.logger.error(`User with email ${email} missing required fields`);
+        throw new ConflictException(
+          ResponseHelper.error(ResponseCode.MISSING_FIELDS),
+        );
+      }
+
+      // Try to get user from Redis cache
+      const cachedUser = await this.getCachedUser(email);
+
+      let user;
+
+      if (cachedUser) {
+        user = cachedUser;
+      } else {
+        // Find user in database
+        const [dbUser] = await this.dbServer
+          .select()
+          .from(UserTable)
+          .where(eq(UserTable.email, email))
+          .limit(1);
+
+        if (!dbUser) {
+          this.logger.error(
+            `User with ${email} trying to signin with invalid credentials`,
+          );
+          throw new UnauthorizedException(
+            ResponseHelper.error(ResponseCode.INVALID_CREDENTIALS),
+          );
+        }
+
+        // Check if user is banned
+        if (dbUser.isBanned) {
+          this.logger.error(`User with ${email} is banned`);
+          throw new UnauthorizedException(
+            ResponseHelper.error(ResponseCode.USER_BANNED),
+          );
+        }
+
+        // Check if user is disabled
+        if (dbUser.isDisabled) {
+          this.logger.error(`User with ${email} is disabled`);
+          throw new UnauthorizedException(
+            ResponseHelper.error(ResponseCode.USER_DISABLED),
+          );
+        }
+
+        // Check if user is verified
+        if (!dbUser.isVerified) {
+          this.logger.error(`User with ${email} is not verified`);
+          throw new UnauthorizedException(
+            ResponseHelper.error(ResponseCode.USER_NOT_VERIFIED),
+          );
+        }
+
+        user = dbUser;
+
+        // Cache for 15 minutes (900 seconds)
+        await this.cacheUser(user);
+      }
+
+      // Verify password
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+
+      if (!isPasswordValid) {
+        this.logger.error(
+          `User with ${email} trying to signin with invalid password at ${this.getTimestamp()}`,
+        );
+        throw new UnauthorizedException(
+          ResponseHelper.error(ResponseCode.INVALID_CREDENTIALS),
+        );
+      }
+
+      const payload = {
+        email: user.email,
+        sub: user.id,
+        tokenVersion: user.tokenVersion,
+      };
+
+      const token = this.generateToken(payload);
+
+      const resUser = {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        imageUrl: user.imageUrl,
+        userRole: user.userRole,
+        token,
+      };
+
+      return ResponseHelper.success(ResponseCode.SIGNIN_SUCCESS, {
+        users: [resUser],
+      });
+    },
+    this.logger,
+    'Failed to sign in user',
   );
 }
