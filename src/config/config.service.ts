@@ -53,7 +53,7 @@ export class ConfigService {
 
   // R2
   get storageProvider(): string {
-    return this.configService.getOrThrow<string>('STORAGE_PROVIDER');
+    return this.configService.get<string>('STORAGE_PROVIDER') ?? 's3';
   }
 
   get r2PublicDomain(): string {
@@ -141,7 +141,7 @@ export class ConfigService {
   }
 
   get smtpPort(): number {
-    return Number(this.configService.getOrThrow<string>('SMTP_PORT'));
+    return Number(this.configService.getOrThrow<string>('SMTP_PORT')) || 587;
   }
 
   get smtpUser(): string {

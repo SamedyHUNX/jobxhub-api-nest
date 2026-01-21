@@ -22,7 +22,9 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
       user: this.configService.dbUser || 'postgres',
       password: this.configService.dbPassword || 'postgres',
       database: this.configService.dbName || 'mydb',
-      ssl: sslEnabled ? { rejectUnauthorized: false } : false,
+      ssl: sslEnabled
+        ? { rejectUnauthorized: this.configService.isProduction }
+        : false,
     });
 
     this.db = drizzle(this.pool, { schema });

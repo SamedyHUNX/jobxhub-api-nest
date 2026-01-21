@@ -14,7 +14,11 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SignInDto, SignUpDto } from './dtos/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
-import { capitalizeString, hashPassword } from '@/utils/helpers';
+import {
+  capitalizeString,
+  hashPassword,
+  sanitizedEmail,
+} from '@/utils/helpers';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
@@ -33,7 +37,7 @@ export class AuthService {
     private s3Service: S3Service,
     private inngestService: InngestClientService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   private get redisServer() {
     if (!this.cacheManager) {
@@ -88,12 +92,16 @@ export class AuthService {
   private async generateAndHashToken(expireMinutes: number) {
     const token = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    // Set token and expiration (1 hour)
+    // Set token and expiration based on provided minutes
     const expiresAt = new Date(Date.now() + expireMinutes * 60 * 1000);
     return { token, hashedToken, expiresAt };
   }
 
   private async cacheUser(user: any, ttl: number = 900) {
+    // Exlude sensitive fields before caching
+    const { password, verificationToken, verificationExpires, ...safeUser } =
+      user;
+    user = safeUser;
     const cacheKey = `user:email:${user.email}`;
     await this.redisServer.set(cacheKey, JSON.stringify(user), ttl);
   }
@@ -172,7 +180,7 @@ export class AuthService {
       await this.s3Server.uploadFile(imageFile, imageKey);
 
       // Get the S3 URL (public or presigned)
-      const storageProvider = this.configService.storageProvider ?? 's3';
+      const storageProvider = this.configService.storageProvider;
       const publicDomain =
         storageProvider === 'r2'
           ? this.configService.r2PublicDomain
@@ -321,7 +329,9 @@ export class AuthService {
       const { email, password } = data;
 
       if (!email || !password) {
-        this.logger.error(`User with email ${email} missing required fields`);
+        this.logger.error(
+          `User with email ${sanitizedEmail(email)} missing required fields`,
+        );
         throw new ConflictException(
           ResponseHelper.error(ResponseCode.MISSING_FIELDS),
         );
@@ -331,6 +341,7 @@ export class AuthService {
       const cachedUser = await this.getCachedUser(email);
 
       let user;
+      let passwordHash: string;
 
       if (cachedUser) {
         user = cachedUser;
@@ -351,7 +362,7 @@ export class AuthService {
         if (!dbStatus) {
           // User deleted but still in cache
           this.logger.error(
-            `User with ${email} found in cache but not in database`,
+            `User with ${sanitizedEmail(email)} found in cache but not in database`,
           );
           throw new UnauthorizedException(
             ResponseHelper.error(ResponseCode.INVALID_CREDENTIALS),
@@ -360,7 +371,7 @@ export class AuthService {
 
         // Check if user is banned
         if (dbStatus.isBanned) {
-          this.logger.error(`User with ${email} is banned`);
+          this.logger.error(`User with ${sanitizedEmail(email)} is banned`);
           throw new UnauthorizedException(
             ResponseHelper.error(ResponseCode.USER_BANNED),
           );
@@ -368,7 +379,7 @@ export class AuthService {
 
         // Check if user is disabled
         if (dbStatus.isDisabled) {
-          this.logger.error(`User with ${email} is disabled`);
+          this.logger.error(`User with ${sanitizedEmail(email)} is disabled`);
           throw new UnauthorizedException(
             ResponseHelper.error(ResponseCode.USER_DISABLED),
           );
@@ -376,14 +387,23 @@ export class AuthService {
 
         // Check if user is verified
         if (!dbStatus.isVerified) {
-          this.logger.error(`User with ${email} is not verified`);
+          this.logger.error(
+            `User with ${sanitizedEmail(email)} is not verified`,
+          );
           throw new UnauthorizedException(
             ResponseHelper.error(ResponseCode.USER_NOT_VERIFIED),
           );
         }
 
-        // Update user with fresh password and status
-        user = { ...user, ...dbStatus };
+        // Separate password from status
+        const { password: dbPassword, ...status } = dbStatus;
+        passwordHash = dbPassword;
+
+        // Update user with fresh status ONLY (no password hash)
+        user = { ...user, ...status };
+
+        // Update cache with fresh sanitized user
+        await this.cacheUser(user);
       } else {
         // Find user in database
         const [dbUser] = await this.dbServer
@@ -394,7 +414,7 @@ export class AuthService {
 
         if (!dbUser) {
           this.logger.error(
-            `User with ${email} trying to signin with invalid credentials`,
+            `User with ${sanitizedEmail(email)} trying to signin with invalid credentials`,
           );
           throw new UnauthorizedException(
             ResponseHelper.error(ResponseCode.INVALID_CREDENTIALS),
@@ -403,7 +423,7 @@ export class AuthService {
 
         // Check if user is banned
         if (dbUser.isBanned) {
-          this.logger.error(`User with ${email} is banned`);
+          this.logger.error(`User with ${sanitizedEmail(email)} is banned`);
           throw new UnauthorizedException(
             ResponseHelper.error(ResponseCode.USER_BANNED),
           );
@@ -411,7 +431,7 @@ export class AuthService {
 
         // Check if user is disabled
         if (dbUser.isDisabled) {
-          this.logger.error(`User with ${email} is disabled`);
+          this.logger.error(`User with ${sanitizedEmail(email)} is disabled`);
           throw new UnauthorizedException(
             ResponseHelper.error(ResponseCode.USER_DISABLED),
           );
@@ -419,24 +439,28 @@ export class AuthService {
 
         // Check if user is verified
         if (!dbUser.isVerified) {
-          this.logger.error(`User with ${email} is not verified`);
+          this.logger.error(
+            `User with ${sanitizedEmail(email)} is not verified`,
+          );
           throw new UnauthorizedException(
             ResponseHelper.error(ResponseCode.USER_NOT_VERIFIED),
           );
         }
 
+        passwordHash = dbUser.password;
         user = dbUser;
 
         // Cache for 15 minutes (900 seconds)
+        // cacheUser will strip sensitive fields like password before caching
         await this.cacheUser(user);
       }
 
       // Verify password
-      const isPasswordValid = await bcrypt.compare(password, user.password);
+      const isPasswordValid = await bcrypt.compare(password, passwordHash);
 
       if (!isPasswordValid) {
         this.logger.error(
-          `User with ${email} trying to signin with invalid password at ${this.getTimestamp()}`,
+          `User with ${sanitizedEmail(email)} trying to signin with invalid password at ${this.getTimestamp()}`,
         );
         throw new UnauthorizedException(
           ResponseHelper.error(ResponseCode.INVALID_CREDENTIALS),

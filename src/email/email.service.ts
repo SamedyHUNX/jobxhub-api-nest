@@ -60,7 +60,7 @@ export class EmailService {
     const lang = translations[acceptLanguage] || translations.en;
 
     const mailOptions = {
-      from: process.env.EMAIL_FROM,
+      from: this.configService.emailFrom,
       to,
       subject: lang.subject,
       html: `
@@ -88,7 +88,6 @@ export class EmailService {
   }
 
   async sendWelcomeEmail(to: string, name: string, acceptLanguage: string) {
-    console.log('diddy', acceptLanguage);
     // Email translations
     const translations = {
       en: {
@@ -120,7 +119,7 @@ export class EmailService {
       translations.en;
 
     const mailOptions = {
-      from: process.env.EMAIL_FROM,
+      from: this.configService.emailFrom,
       to,
       subject: content.subject,
       html: `
@@ -179,7 +178,7 @@ export class EmailService {
     const lang = translations[acceptLanguage] || translations.en;
 
     const mailOptions = {
-      from: process.env.EMAIL_FROM,
+      from: this.configService.emailFrom,
       to,
       subject: lang.subject,
       html: `

@@ -24,3 +24,7 @@ export async function hashPassword(password: string): Promise<string> {
   const salt = await bcrypt.genSalt(saltRounds);
   return bcrypt.hash(password, salt);
 }
+
+export function sanitizedEmail(email: string): string {
+  return email ? `${email.substring(0, 3)}***` : 'unknown';
+}
