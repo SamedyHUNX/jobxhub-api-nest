@@ -19,7 +19,7 @@ import * as crypto from 'crypto';
 import { UserTable } from '@/drizzle/schema';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
-import { InngestClientService } from '@/inngest/inngest-client.service';
+import { InngestClientService } from '@/inngest/inngest.service';
 
 @Injectable()
 export class AuthService {
@@ -147,7 +147,10 @@ export class AuthService {
       }
 
       // Sanitize filename to prevent path traversal
-      const sanitizedName = imageFile.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const sanitizedName = imageFile.originalname.replace(
+        /[^a-zA-Z0-9._-]/g,
+        '_',
+      );
 
       // Upload image to S3
       const imageKey = `users/avatars/${Date.now()}-${sanitizedName}`;

@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
-import { InngestController } from './inngest.controller';
+import { InngestClientService } from './inngest.service';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  controllers: [InngestController],
+  imports: [ConfigModule],
+  providers: [InngestClientService],
+  exports: [InngestClientService],
 })
 export class InngestModule {}

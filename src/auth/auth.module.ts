@@ -5,11 +5,13 @@ import { PassportModule } from '@nestjs/passport';
 import { S3Module } from '@/s3/s3.module';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt/jwt.strategy';
+import { InngestModule } from '@/inngest/inngest.module';
 
 @Module({
   imports: [
     S3Module,
     PassportModule,
+    InngestModule,
     JwtModule.registerAsync({
       useFactory: async () => ({
         secret: process.env.JWT_SECRET,

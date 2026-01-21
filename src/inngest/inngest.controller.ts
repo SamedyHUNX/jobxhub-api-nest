@@ -1,7 +1,7 @@
 import { All, Controller, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { serve } from 'inngest/express';
-import { InngestClientService } from './inngest-client.service';
+import { InngestClientService } from './inngest.service';
 // import { createUser, forgotPassword } from './functions/auth';
 
 @Controller('api/inngest')
