@@ -88,6 +88,27 @@ export class ConfigService {
     return this.configService.getOrThrow<string>('INNGEST_SIGNING_KEY');
   }
 
+  // Email
+  get smtpHost(): string {
+    return this.configService.getOrThrow<string>('SMTP_HOST');
+  }
+
+  get smtpPort(): number {
+    return Number(this.configService.getOrThrow<string>('SMTP_PORT'));
+  }
+
+  get smtpUser(): string {
+    return this.configService.getOrThrow<string>('SMTP_USER');
+  }
+
+  get smtpPass(): string {
+    return this.configService.getOrThrow<string>('SMTP_PASS');
+  }
+
+  get emailFrom(): string {
+    return this.configService.getOrThrow<string>('EMAIL_FROM');
+  }
+
   get<T>(key: string): T | undefined {
     return this.configService.get<T>(key);
   }
