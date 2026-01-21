@@ -14,12 +14,12 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SignUpDto } from './dtos/auth.dto';
 import { eq, or } from 'drizzle-orm';
-import { inngest } from '@/inngest/inngest-client.service';
 import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import { UserTable } from '@/drizzle/schema';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
+import { InngestClientService } from '@/inngest/inngest-client.service';
 
 @Injectable()
 export class AuthService {
@@ -29,6 +29,7 @@ export class AuthService {
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private dbService: DrizzleService,
     private s3Service: S3Service,
+    private inngestService: InngestClientService,
   ) {}
 
   private get redisServer() {
@@ -39,6 +40,16 @@ export class AuthService {
       );
     }
     return this.cacheManager;
+  }
+
+  private get inngest() {
+    if (!this.inngestService || !this.inngestService.inngest) {
+      this.logger.error(`Inngest client is down at ${this.getTimestamp()}`);
+      throw new InternalServerErrorException(
+        ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
+      );
+    }
+    return this.inngestService.inngest;
   }
 
   private getTimestamp(): string {
@@ -181,7 +192,7 @@ export class AuthService {
           .returning();
 
         // TRIGGER INNGEST EVENT for email verification
-        await inngest.send({
+        await this.inngest.send({
           name: 'jobxhub/user.created',
           data: {
             userId: user.id,
