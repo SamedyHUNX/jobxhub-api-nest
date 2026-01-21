@@ -12,9 +12,9 @@ import { AppConfigModule } from '@/config/config.module';
       inject: [ConfigService],
       isGlobal: true,
       useFactory: async (configService: ConfigService) => {
-        const host = configService.get<string>('redisHost') || 'localhost';
-        const port = configService.get<number>('redisPort') || 6379;
-        const password = configService.get<string>('redisPw');
+        const host = configService.redisHost || 'localhost';
+        const port = configService.redisPort || 6379;
+        const password = configService.redisPw;
         // Construct Redis URL: redis://[:password@]host:port
         const url = `redis://${password ? `:${encodeURIComponent(password)}@` : ''}${host}:${port}`;
 
