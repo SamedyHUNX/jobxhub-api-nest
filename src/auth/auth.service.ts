@@ -14,7 +14,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SignUpDto } from './dtos/auth.dto';
 import { eq, or } from 'drizzle-orm';
-import { inngest } from '@/inngest/inngest.client';
+import { inngest } from '@/inngest/inngest-client.service';
 import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import { UserTable } from '@/drizzle/schema';
