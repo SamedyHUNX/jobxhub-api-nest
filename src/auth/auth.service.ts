@@ -37,7 +37,7 @@ export class AuthService {
     private s3Service: S3Service,
     private inngestService: InngestClientService,
     private configService: ConfigService,
-  ) { }
+  ) {}
 
   private get redisServer() {
     if (!this.cacheManager) {
@@ -184,7 +184,7 @@ export class AuthService {
       const publicDomain =
         storageProvider === 'r2'
           ? this.configService.r2PublicDomain
-          : this.configService.s3PublicDomain;
+          : this.configService.awsS3PublicDomain;
 
       if (!publicDomain) {
         throw new InternalServerErrorException(

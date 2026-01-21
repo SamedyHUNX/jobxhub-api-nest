@@ -56,47 +56,47 @@ export class ConfigService {
     return this.configService.get<string>('STORAGE_PROVIDER') ?? 's3';
   }
 
-  get r2PublicDomain(): string {
-    return this.configService.getOrThrow<string>('R2_PUBLIC_DOMAIN');
+  get r2PublicDomain(): string | undefined {
+    return this.configService.get<string>('R2_PUBLIC_DOMAIN');
   }
 
-  get r2AccessKeyId(): string {
-    return this.configService.getOrThrow<string>('R2_ACCESS_KEY_ID');
+  get r2AccessKeyId(): string | undefined {
+    return this.configService.get<string>('R2_ACCESS_KEY_ID');
   }
 
-  get r2SecretAccessKey(): string {
-    return this.configService.getOrThrow<string>('R2_SECRET_ACCESS_KEY');
+  get r2SecretAccessKey(): string | undefined {
+    return this.configService.get<string>('R2_SECRET_ACCESS_KEY');
   }
 
-  get r2BucketName(): string {
-    return this.configService.getOrThrow<string>('R2_BUCKET_NAME');
+  get r2BucketName(): string | undefined {
+    return this.configService.get<string>('R2_BUCKET_NAME');
   }
 
-  get r2AccountId(): string {
-    return this.configService.getOrThrow<string>('R2_ACCOUNT_ID');
+  get r2AccountId(): string | undefined {
+    return this.configService.get<string>('R2_ACCOUNT_ID');
   }
 
   //////////////////////////////////////////////////////////////////////////////////
 
   // AWS S3
-  get awsRegion(): string {
-    return this.configService.getOrThrow<string>('AWS_REGION');
+  get awsRegion(): string | undefined {
+    return this.configService.get<string>('AWS_REGION');
   }
 
-  get awsAccessKeyId(): string {
-    return this.configService.getOrThrow<string>('AWS_ACCESS_KEY_ID');
+  get awsAccessKeyId(): string | undefined {
+    return this.configService.get<string>('AWS_ACCESS_KEY_ID');
   }
 
-  get awsSecretAccessKey(): string {
-    return this.configService.getOrThrow<string>('AWS_SECRET_ACCESS_KEY');
+  get awsSecretAccessKey(): string | undefined {
+    return this.configService.get<string>('AWS_SECRET_ACCESS_KEY');
   }
 
-  get s3BucketName(): string {
-    return this.configService.getOrThrow<string>('S3_BUCKET_NAME');
+  get awsS3BucketName(): string | undefined {
+    return this.configService.get<string>('S3_BUCKET_NAME');
   }
 
-  get s3PublicDomain(): string {
-    return this.configService.getOrThrow<string>('S3_PUBLIC_DOMAIN');
+  get awsS3PublicDomain(): string | undefined {
+    return this.configService.get<string>('S3_PUBLIC_DOMAIN');
   }
 
   //////////////////////////////////////////////////////////////////////////////////

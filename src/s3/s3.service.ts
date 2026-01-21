@@ -9,43 +9,45 @@ import {
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
+import { ConfigService } from '@/config/config.service';
 
 @Injectable()
 export class S3Service {
   private s3Client: S3Client;
   private bucketName: string;
 
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
     // Support both AWS S3 and Cloudflare R2
-    const isR2 = process.env.STORAGE_PROVIDER === 'r2';
+    const isR2 = this.configService.storageProvider === 'r2';
     const accessKeyId =
-      process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+      this.configService.r2AccessKeyId || this.configService.awsAccessKeyId;
     const bucketName =
-      process.env.R2_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME;
+      this.configService.r2BucketName || this.configService.awsS3BucketName;
     const secretAccessKey =
-      process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+      this.configService.r2SecretAccessKey ||
+      this.configService.awsSecretAccessKey;
 
     if (!accessKeyId || !secretAccessKey || !bucketName) {
       throw new Error('Missing S3/R2 configuration in environment variables');
     }
 
     const clientConfig: any = {
-      region: isR2 ? 'auto' : process.env.AWS_REGION || 'ap-northeast-1',
+      region: isR2 ? 'auto' : this.configService.awsRegion || 'ap-northeast-1',
       credentials: {
         accessKeyId,
         secretAccessKey,
       },
     };
 
-    if (isR2 && !process.env.R2_ACCOUNT_ID) {
+    if (isR2 && !this.configService.r2AccountId) {
       throw new Error(
         'R2_ACCOUNT_ID is required when using Cloudflare R2 storage',
       );
     }
 
     // R2 endpoint if using Cloudflare R2
-    if (isR2 && process.env.R2_ACCOUNT_ID) {
-      clientConfig.endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+    if (isR2 && this.configService.r2AccountId) {
+      clientConfig.endpoint = `https://${this.configService.r2AccountId}.r2.cloudflarestorage.com`;
     }
 
     this.s3Client = new S3Client(clientConfig);
