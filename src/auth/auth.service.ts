@@ -93,7 +93,7 @@ export class AuthService {
   signUp = catchAsync(
     async (
       data: SignUpDto,
-      file: Express.Multer.File,
+      imageFile: Express.Multer.File,
       acceptLanguage: string,
     ) => {
       const { username, password, email, firstName, lastName, dateOfBirth } =
@@ -106,7 +106,7 @@ export class AuthService {
         email,
         firstName,
         lastName,
-        file,
+        imageFile,
         dateOfBirth,
       };
 
@@ -140,18 +140,18 @@ export class AuthService {
         }
       }
 
-      if (!file || !file.originalname) {
+      if (!imageFile || !imageFile.originalname) {
         throw new ConflictException(
           ResponseHelper.error(ResponseCode.MISSING_PHOTO),
         );
       }
 
       // Sanitize filename to prevent path traversal
-      const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const sanitizedName = imageFile.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
 
       // Upload image to S3
       const imageKey = `users/avatars/${Date.now()}-${sanitizedName}`;
-      await this.s3Server.uploadFile(file, imageKey);
+      await this.s3Server.uploadFile(imageFile, imageKey);
 
       // Get the S3 URL (public or presigned)
       const imageUrl = `${process.env.R2_PUBLIC_DOMAIN}/${imageKey}`;
