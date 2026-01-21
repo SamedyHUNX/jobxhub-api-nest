@@ -38,9 +38,11 @@ export class ConfigService {
   get redisHost(): string {
     return this.configService.get<string>('REDIS_HOST') ?? 'localhost';
   }
-
   get redisPort(): number {
     return Number(this.configService.get<number>('REDIS_PORT')) || 6379;
+  }
+  get redisPw(): string {
+    return this.configService.getOrThrow<string>('REDIS_PW');
   }
 
   // AWS S3

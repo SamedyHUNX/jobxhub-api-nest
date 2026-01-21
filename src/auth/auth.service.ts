@@ -1,4 +1,3 @@
-import { AppService } from '@/app.service';
 import { DrizzleService } from '@/drizzle/drizzle.service';
 import { S3Service } from '@/s3/s3.service';
 import { catchAsync } from '@/utils/catch-async';
@@ -10,26 +9,29 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SignUpDto } from './dtos/auth.dto';
-import { eq, or } from 'drizzle-orm';
+import { and, eq, gt, or } from 'drizzle-orm';
 import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import { UserTable } from '@/drizzle/schema';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { InngestClientService } from '@/inngest/inngest.service';
+import { ConfigService } from '@/config/config.service';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AppService.name);
+  private readonly logger = new Logger(AuthService.name);
   constructor(
-    private jwtService: JwtService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private jwtService: JwtService,
     private dbService: DrizzleService,
     private s3Service: S3Service,
     private inngestService: InngestClientService,
+    private configService: ConfigService,
   ) {}
 
   private get redisServer() {
@@ -141,7 +143,7 @@ export class AuthService {
       }
 
       if (!imageFile || !imageFile.originalname) {
-        throw new ConflictException(
+        throw new BadRequestException(
           ResponseHelper.error(ResponseCode.MISSING_PHOTO),
         );
       }
@@ -157,7 +159,19 @@ export class AuthService {
       await this.s3Server.uploadFile(imageFile, imageKey);
 
       // Get the S3 URL (public or presigned)
-      const imageUrl = `${process.env.R2_PUBLIC_DOMAIN}/${imageKey}`;
+      const storageProvider =
+        this.configService.get<string>('STORAGE_PROVIDER') ?? 's3';
+      const publicDomain =
+        storageProvider === 'r2'
+          ? this.configService.get<string>('R2_PUBLIC_DOMAIN')
+          : this.configService.get<string>('S3_PUBLIC_DOMAIN');
+
+      if (!publicDomain) {
+        throw new InternalServerErrorException(
+          ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
+        );
+      }
+      const imageUrl = `${publicDomain}/${imageKey}`;
 
       try {
         // Hash password
@@ -175,7 +189,14 @@ export class AuthService {
         } = await this.generateAndHashToken(60 * 24); // 24 hours expiration
 
         // Send email with reset link
-        const verificationUrl = `${process.env.FRONTEND_URL}/${acceptLanguage}/auth/verify-email?token=${verificationToken}`;
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+        const locale = acceptLanguage || 'en';
+        if (!frontendUrl) {
+          throw new InternalServerErrorException(
+            ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
+          );
+        }
+        const verificationUrl = `${frontendUrl}/${locale}/auth/verify-email?token=${verificationToken}`;
 
         // Create user
         const [user] = await this.dbServer
@@ -195,19 +216,25 @@ export class AuthService {
           .returning();
 
         // TRIGGER INNGEST EVENT for email verification
-        await this.inngest.send({
-          name: 'jobxhub/user.created',
-          data: {
-            userId: user.id,
-            email: user.email,
-            name: user.username,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            imageUrl: user.imageUrl,
-            verificationUrl,
-            acceptLanguage: acceptLanguage || 'en',
-          },
-        });
+        try {
+          await this.inngest.send({
+            name: 'jobxhub/user.created',
+            data: {
+              userId: user.id,
+              email: user.email,
+              name: user.username,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              imageUrl: user.imageUrl,
+              verificationUrl,
+              acceptLanguage: locale,
+            },
+          });
+        } catch (err: any) {
+          this.logger.error(
+            `Failed to emit user.created event: ${err?.message ?? err}`,
+          );
+        }
 
         return {
           message: 'User signed up successfully. Please verify your email.',
@@ -229,5 +256,49 @@ export class AuthService {
     },
     this.logger,
     `Failed to sign up user`,
+  );
+
+  verifyEmail = catchAsync(
+    async (token: string) => {
+      // Hash the token from URL to compare with stored hash
+      const hashedToken = crypto
+        .createHash('sha256')
+        .update(token)
+        .digest('hex');
+
+      // Find user by verification token and check expiration
+      const [user] = await this.dbServer
+        .select()
+        .from(UserTable)
+        .where(
+          and(
+            eq(UserTable.verificationToken, hashedToken),
+            gt(UserTable.verificationExpires, new Date()),
+          ),
+        )
+        .limit(1);
+
+      if (!user) {
+        this.logger.error('Invalid or expired email verification token used');
+        throw new UnauthorizedException(
+          ResponseHelper.error(ResponseCode.INVALID_TOKEN),
+        );
+      }
+
+      // Update user's verified status and clear verification token fields
+      await this.dbServer
+        .update(UserTable)
+        .set({
+          isVerified: true,
+          verificationToken: null,
+          verificationExpires: null,
+        })
+        .where(eq(UserTable.id, user.id));
+
+      this.logger.log(`Email successfully verified for user ID: ${user.id}`);
+      return ResponseHelper.success(ResponseCode.EMAIL_VERIFIED);
+    },
+    this.logger,
+    'Failed to verify email',
   );
 }
