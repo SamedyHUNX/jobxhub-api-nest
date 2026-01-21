@@ -335,6 +335,56 @@ export class AuthService {
 
       if (cachedUser) {
         user = cachedUser;
+
+        // Verify user status from DB to prevent cache inconsistencies
+        const [dbStatus] = await this.dbServer
+          .select({
+            isBanned: UserTable.isBanned,
+            isDisabled: UserTable.isDisabled,
+            isVerified: UserTable.isVerified,
+            tokenVersion: UserTable.tokenVersion,
+            password: UserTable.password,
+          })
+          .from(UserTable)
+          .where(eq(UserTable.email, email))
+          .limit(1);
+
+        if (!dbStatus) {
+          // User deleted but still in cache
+          this.logger.error(
+            `User with ${email} found in cache but not in database`,
+          );
+          throw new UnauthorizedException(
+            ResponseHelper.error(ResponseCode.INVALID_CREDENTIALS),
+          );
+        }
+
+        // Check if user is banned
+        if (dbStatus.isBanned) {
+          this.logger.error(`User with ${email} is banned`);
+          throw new UnauthorizedException(
+            ResponseHelper.error(ResponseCode.USER_BANNED),
+          );
+        }
+
+        // Check if user is disabled
+        if (dbStatus.isDisabled) {
+          this.logger.error(`User with ${email} is disabled`);
+          throw new UnauthorizedException(
+            ResponseHelper.error(ResponseCode.USER_DISABLED),
+          );
+        }
+
+        // Check if user is verified
+        if (!dbStatus.isVerified) {
+          this.logger.error(`User with ${email} is not verified`);
+          throw new UnauthorizedException(
+            ResponseHelper.error(ResponseCode.USER_NOT_VERIFIED),
+          );
+        }
+
+        // Update user with fresh password and status
+        user = { ...user, ...dbStatus };
       } else {
         // Find user in database
         const [dbUser] = await this.dbServer

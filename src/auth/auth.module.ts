@@ -17,8 +17,11 @@ import { ConfigService } from '@/config/config.service';
       useFactory: async (configService: ConfigService) => {
         const secret = configService.get<string>('JWT_SECRET');
         if (!secret) throw new Error('JWT_SECRET is required');
-        const expiresIn =
-          Number(configService.get<string>('JWT_EXPIRES_IN')) ?? 3600;
+        const expiresInRaw = configService.get<string>('JWT_EXPIRES_IN');
+        const expiresInParsed = Number(expiresInRaw);
+        const expiresIn = Number.isFinite(expiresInParsed)
+          ? expiresInParsed
+          : 3600;
         return {
           secret,
           signOptions: { expiresIn },
