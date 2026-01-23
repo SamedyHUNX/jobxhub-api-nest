@@ -1,9 +1,10 @@
 import { DrizzleService } from '@/drizzle/drizzle.service';
 import { S3Service } from '@/s3/s3.service';
 import {
-  BadGatewayException,
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -21,6 +22,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { InngestClientService } from '@/inngest/inngest.service';
 import { ConfigService } from '@/config/config.service';
+import * as Sentry from '@sentry/nestjs';
 
 @Injectable()
 export class AuthService {
@@ -56,9 +58,9 @@ export class AuthService {
 
   private get dbServer() {
     if (!this.dbService.db) {
-      this.logger.error(
-        `Database connection not established at ${this.getTimestamp()}`,
-      );
+      const message = `Database connection not established at ${this.getTimestamp()}`;
+      this.logger.error(message);
+      Sentry.captureException(new Error(message));
       throw new InternalServerErrorException('Database unavailable');
     }
     return this.dbService.db;
@@ -410,7 +412,7 @@ export class AuthService {
       // Verify token version from cache
       if (payload.tokenVersion !== cachedUser.tokenVersion) {
         // Token version mismatch - clear cache and reject
-        await this.clearCachedUser(cachedUser.email);
+        await this.clearCachedUser(cachedUser);
         this.logger.error(
           `Token version mismatch for user ID ${cachedUser.id}. Token invalidated.`,
         );
@@ -473,7 +475,10 @@ export class AuthService {
       this.logger.warn(
         `Too many password reset requests from IP: ${ipAddress}`,
       );
-      throw new BadGatewayException('Too many requests');
+      throw new HttpException(
+        'Too many requests',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     // 2. Rate limit by email
@@ -545,7 +550,7 @@ export class AuthService {
 
     // TRIGGER INNGEST EVENT
     await this.inngest.send({
-      name: 'jobxhub/user.reset_password_requested',
+      name: 'jobxhub/user.reset_password',
       data: {
         email,
         resetUrl,
