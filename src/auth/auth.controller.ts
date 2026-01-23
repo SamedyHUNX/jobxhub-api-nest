@@ -5,6 +5,8 @@ import {
   Get,
   Headers,
   Post,
+  Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -17,11 +19,14 @@ import { JwtAuthGuard } from './jwt/jwt.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { plainToInstance } from 'class-transformer';
 import { UserResponseDto } from '@/users/dtos/user-response.dto';
+import type { Response } from 'express';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Sign Up (/api/auth/signup)
   @Post('signup')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -35,14 +40,41 @@ export class AuthController {
   ) {
     return this.authService.signUp(data, file, acceptLanguage);
   }
+
+  // Verify Email (/api/auth/verify-email)
   @Post('verify-email')
   verifyEmail(@Body('token') token: string) {
     return this.authService.verifyEmail(token);
   }
+
+  // Sign In (/api/auth/signin)
   @Post('signin')
-  signIn(@Body() data: SignInDto) {
-    return this.authService.signIn(data);
+  async signIn(@Body() data: SignInDto, @Res() res: Response) {
+    const {
+      data: { users },
+      token,
+    } = await this.authService.signIn(data);
+
+    // Set HttpOnly Secure SameSite cookie
+    res.cookie('access_token', token, {
+      httpOnly: true, // Not accessible via JavaScript
+      secure: process.env.NODE_ENV === 'production', // Only sent over HTTPS
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Sent with cross-site requests
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/', // Available across the entire site
+    });
+
+    // Return user info without exposing token
+    return res.json({
+      message: 'Signed in successfully',
+      data: {
+        users,
+      },
+      code: 200,
+    });
   }
+
+  // Get current user (/api/auth/me)
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)

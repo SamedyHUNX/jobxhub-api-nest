@@ -1,6 +1,5 @@
 import { DrizzleService } from '@/drizzle/drizzle.service';
 import { S3Service } from '@/s3/s3.service';
-import { catchAsync } from '@/utils/catch-async';
 import {
   BadRequestException,
   ConflictException,
@@ -13,11 +12,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SignInDto, SignUpDto } from './dtos/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
-import {
-  capitalizeString,
-  hashPassword,
-  sanitizedEmail,
-} from '@/utils/helpers';
+import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
@@ -25,6 +20,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { InngestClientService } from '@/inngest/inngest.service';
 import { ConfigService } from '@/config/config.service';
+import { first } from 'rxjs';
 
 @Injectable()
 export class AuthService {
@@ -105,8 +101,15 @@ export class AuthService {
     imageFile: Express.Multer.File,
     acceptLanguage: string,
   ) {
-    const { username, password, email, firstName, lastName, dateOfBirth } =
-      data;
+    const {
+      username,
+      password,
+      email,
+      firstName,
+      lastName,
+      dateOfBirth,
+      phoneNumber,
+    } = data;
 
     // Validate required fields
     if (
@@ -115,7 +118,8 @@ export class AuthService {
       !email ||
       !firstName ||
       !lastName ||
-      !dateOfBirth
+      !dateOfBirth ||
+      !phoneNumber
     ) {
       throw new BadRequestException('All fields are required');
     }
@@ -182,7 +186,7 @@ export class AuthService {
         );
       }
 
-      const verificationUrl = `${frontendUrl}/${locale}/auth/verify-email?token=${verificationToken}`;
+      const verificationUrl = `${frontendUrl}/${locale}/verify-email?token=${verificationToken}`;
 
       const [user] = await this.dbServer
         .insert(UserTable)
@@ -193,6 +197,7 @@ export class AuthService {
           lastName: capitalizedLastName,
           dateOfBirth: new Date(dateOfBirth),
           password: hashedPassword,
+          phoneNumber,
           imageUrl,
           userRole: 'USER',
           verificationToken: hashedVerificationToken,
@@ -364,12 +369,45 @@ export class AuthService {
     const token = this.generateToken(payload);
 
     return {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      imageUrl: user.imageUrl,
-      userRole: user.userRole,
+      data: {
+        users: [
+          {
+            ...user,
+          },
+        ],
+      },
       token,
     };
   }
+
+  validateUser = async (payload: any) => {
+    console.log('JWT payload:', payload);
+    if (!payload) {
+      throw new BadRequestException('Invalid payload');
+    }
+    const [user] = await this.dbServer
+      .select()
+      .from(UserTable)
+      .where(eq(UserTable.id, payload.sub))
+      .limit(1);
+
+    if (!user) {
+      this.logger.error(
+        `User with ID ${payload.sub} not found during validation`,
+      );
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Check if tokenVersion matches
+    if (payload.tokenVersion !== user.tokenVersion) {
+      this.logger.error(
+        `Token version mismatch for user ID ${user.id}. Token invalidated.`,
+      );
+      throw new UnauthorizedException(
+        'Token has been invalidated. Please sign in again.',
+      );
+    }
+
+    return user; // this becomes req.user
+  };
 }

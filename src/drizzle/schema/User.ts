@@ -22,6 +22,7 @@ export const UserTable = pgTable('users', {
   dateOfBirth: timestamp('date_of_birth', { withTimezone: true }).notNull(),
   resetPasswordToken: varchar('reset_password_token'),
   resetPasswordExpires: timestamp('reset_password_expires'),
+  phoneNumber: varchar('phone_number').notNull(),
   tokenVersion: integer('token_version').notNull().default(0),
   isBanned: boolean('is_banned').default(false),
   isVerified: boolean('is_verified').default(false),

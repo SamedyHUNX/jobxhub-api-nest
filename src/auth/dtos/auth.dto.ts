@@ -36,6 +36,7 @@ export class SignUpDto {
   @IsString() @IsNotEmpty() firstName: string;
   @IsString() @IsNotEmpty() lastName: string;
   @IsDateString() @IsNotEmpty() dateOfBirth: string;
+  @IsString() @IsNotEmpty() phoneNumber: string;
 }
 
 export class SignInDto {
