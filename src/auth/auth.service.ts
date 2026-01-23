@@ -110,6 +110,38 @@ export class AuthService {
     await this.cacheManager.del(`user:email:${user.email}`);
     await this.cacheManager.del(`user:id:${user.id}`);
   }
+
+  // Helper method to invalidate user cache
+  private async invalidateUserCache(email: string, userId: string) {
+    // Delete cache by email
+    await this.redisServer.del(`user:email:${email}`);
+
+    // Delete cache by user ID
+    await this.redisServer.del(`user:id:${userId}`);
+
+    this.logger.log(`Cache invalidated for user: ${email}`);
+  }
+
+  // Invalidate all sessions (force re-login on all devices)
+  private async invalidateAllUserSessions(userId: string) {
+    // Delete main session cache
+    await this.redisServer.del(`session:${userId}`);
+
+    // For pattern-based deletion, you need the raw Redis client
+    // Option 1: If using cache-manager with Redis store
+    const store = this.redisServer.stores as any;
+    if (store && store.getClient) {
+      const redisClient = store.getClient();
+      const sessionKeys = await redisClient.keys(`session:${userId}:*`);
+      if (sessionKeys.length > 0) {
+        await Promise.all(
+          sessionKeys.map((key: string) => this.redisServer.del(key)),
+        );
+      }
+    }
+
+    this.logger.log(`All sessions invalidated for user ID: ${userId}`);
+  }
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -398,7 +430,6 @@ export class AuthService {
     // Only return token, no user data
     return {
       token,
-      // Remove the users array - client will fetch from /me
     };
   }
 
@@ -463,6 +494,7 @@ export class AuthService {
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
+
   forgotPassword = async (
     email: string,
     acceptLanguage: string,
@@ -477,7 +509,7 @@ export class AuthService {
     // Set with TTL of 3600 seconds (1 hour) - convert to milliseconds
     await this.cacheManager.set(ipRateLimitKey, ipAttempts, 3600 * 1000);
 
-    if (ipAttempts > 3) {
+    if (ipAttempts > 10) {
       this.logger.warn(
         `Too many password reset requests from IP: ${ipAddress}`,
       );
@@ -535,6 +567,8 @@ export class AuthService {
       };
     }
 
+    console.log(user.resetPasswordExpires);
+
     // Generate reset token
     const {
       token: resetToken,
@@ -551,8 +585,17 @@ export class AuthService {
       })
       .where(eq(UserTable.id, user.id));
 
+    const clientUrls = this.configService.get<string>('CLIENT_URLS');
+    if (!clientUrls) {
+      this.logger.error('CLIENT_URLS is not configured');
+      throw new HttpException(
+        'Server configuration error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
     // Send email with reset link
-    const resetUrl = `${this.configService.clientUrl}/${acceptLanguage}/reset-password?token=${resetToken}`;
+    const resetUrl = `${clientUrls.split(',')[0]}/${acceptLanguage}/reset-password?token=${resetToken}`;
 
     // TRIGGER INNGEST EVENT
     await this.inngest.send({
@@ -568,6 +611,71 @@ export class AuthService {
       status: 'success',
       code: 200,
       message: 'Password reset email sent. Please check your inbox',
+    };
+  };
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  resetPassword = async (
+    token: string,
+    newPassword: string,
+    confirmNewPassword: string,
+  ) => {
+    console.log('fjhiksdjkfhskhjd ');
+    if (newPassword !== confirmNewPassword) {
+      this.logger.error(`User provided non-matching passwords`);
+      throw new BadRequestException('Passwords must match');
+    }
+
+    // Hash the token from URL to compare with stored hash
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user by reset token and check expiration
+    const [user] = await this.dbServer
+      .select()
+      .from(UserTable)
+      .where(
+        and(
+          eq(UserTable.resetPasswordToken, hashedToken),
+          gt(UserTable.resetPasswordExpires, new Date()),
+        ),
+      )
+      .limit(1);
+
+    if (!user) {
+      this.logger.error('Invalid or expired password reset token used');
+      throw new UnauthorizedException(
+        'Invalid or expired token. Please request a new one',
+      );
+    }
+
+    // Hash new password
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update user's password and clear reset token fields
+    await this.dbServer
+      .update(UserTable)
+      .set({
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+        tokenVersion: user.tokenVersion + 1,
+      })
+      .where(eq(UserTable.id, user.id));
+
+    // Invalidate all cached user data
+    await this.invalidateUserCache(user.email, user.id);
+
+    // Invalidate all active sessions for this user
+    await this.invalidateAllUserSessions(user.id);
+
+    this.logger.log(`Password successfully reset for user ID: ${user.id}`);
+    return {
+      status: 'success',
+      code: 200,
+      message: 'Password reset successfully',
     };
   };
 }

@@ -73,5 +73,5 @@ export class ResetPasswordDto {
   @IsNotEmpty()
   @MinLength(6)
   @Match('newPassword', { message: 'Passwords do not match' })
-  confirmPassword: string;
+  confirmNewPassword: string;
 }

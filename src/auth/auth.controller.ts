@@ -16,7 +16,12 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { RequestPasswordResetDto, SignInDto, SignUpDto } from './dtos/auth.dto';
+import {
+  RequestPasswordResetDto,
+  ResetPasswordDto,
+  SignInDto,
+  SignUpDto,
+} from './dtos/auth.dto';
 import { ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { JwtAuthGuard } from './jwt/jwt.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -91,5 +96,17 @@ export class AuthController {
     @Ip() ipAddress: string,
   ) {
     return this.authService.forgotPassword(email, acceptLanguage, ipAddress);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Body() { token, newPassword, confirmNewPassword }: ResetPasswordDto,
+  ) {
+    return this.authService.resetPassword(
+      token,
+      newPassword,
+      confirmNewPassword,
+    );
   }
 }
