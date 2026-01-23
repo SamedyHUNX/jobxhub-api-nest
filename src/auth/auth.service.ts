@@ -38,7 +38,9 @@ export class AuthService {
 
   private get redisServer() {
     if (!this.cacheManager) {
-      this.logger.error(`Redis server is down at ${new Date().toISOString()}`);
+      const message = `Redis server is down at ${this.getTimestamp()}`;
+      this.logger.error(message);
+      Sentry.captureException(new Error(message));
       throw new InternalServerErrorException('Cache service unavailable');
     }
     return this.cacheManager;
@@ -46,7 +48,9 @@ export class AuthService {
 
   private get inngest() {
     if (!this.inngestService || !this.inngestService.inngest) {
-      this.logger.error(`Inngest client is down at ${this.getTimestamp()}`);
+      const message = `Inngest client is down at ${this.getTimestamp()}`;
+      this.logger.error(message);
+      Sentry.captureException(new Error(message));
       throw new InternalServerErrorException('Event service unavailable');
     }
     return this.inngestService.inngest;
@@ -68,7 +72,9 @@ export class AuthService {
 
   private get s3Server() {
     if (!this.s3Service) {
-      this.logger.error(`S3 service is down at ${this.getTimestamp()}`);
+      const message = `S3 service is down at ${this.getTimestamp()}`;
+      this.logger.error(message);
+      Sentry.captureException(new Error(message));
       throw new InternalServerErrorException('Storage service unavailable');
     }
     return this.s3Service;
@@ -95,7 +101,7 @@ export class AuthService {
 
   private async cacheUser(user: any) {
     const ttl = 15 * 60 * 1000; // 15 minutes
-    // Cache manager automatically stringifies - don't do JSON.stringify
+    // Cache manager automatically stringifies
     await this.cacheManager.set(`user:email:${user.email}`, user, ttl);
     await this.cacheManager.set(`user:id:${user.id}`, user, ttl);
   }
