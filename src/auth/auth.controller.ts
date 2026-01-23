@@ -50,10 +50,7 @@ export class AuthController {
   // Sign In (/api/auth/signin)
   @Post('signin')
   async signIn(@Body() data: SignInDto, @Res() res: Response) {
-    const {
-      data: { users },
-      token,
-    } = await this.authService.signIn(data);
+    const { token } = await this.authService.signIn(data);
 
     // Set HttpOnly Secure SameSite cookie
     res.cookie('access_token', token, {
@@ -66,10 +63,8 @@ export class AuthController {
 
     // Return user info without exposing token
     return res.json({
+      status: 'success',
       message: 'Signed in successfully',
-      data: {
-        users,
-      },
       code: 200,
     });
   }

@@ -76,6 +76,10 @@ export class ConfigService {
     return this.configService.get<string>('R2_ACCOUNT_ID');
   }
 
+  get r2FileSizeLimit(): number {
+    return this.configService.getOrThrow<number>('R2_FILE_SIZE_LIMIT');
+  }
+
   //////////////////////////////////////////////////////////////////////////////////
 
   // AWS S3

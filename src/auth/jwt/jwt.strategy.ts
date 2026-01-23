@@ -21,10 +21,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromExtractors([
         (req: Request) => {
           const token = req?.cookies?.['access_token'] || null;
-          console.log(
-            '🍪 Cookie token:',
-            token ? token.substring(0, 30) + '...' : 'NOT FOUND',
-          );
           return token;
         },
       ]),
@@ -34,7 +30,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    console.log('✅ JWT validated, payload:', payload);
     const user = await this.authService.validateUser(payload);
     if (!user) {
       throw new UnauthorizedException('Invalid token');

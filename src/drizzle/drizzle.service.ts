@@ -13,6 +13,7 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
   constructor(configService: ConfigService) {
     this.configService = configService;
   }
+
   async onModuleInit() {
     const sslEnabled = process.env.DB_SSL === 'true';
 

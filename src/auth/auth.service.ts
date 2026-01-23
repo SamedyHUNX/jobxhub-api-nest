@@ -83,18 +83,28 @@ export class AuthService {
     return { token, hashedToken, expiresAt };
   }
 
-  private async cacheUser(user: any, ttl: number = 900) {
-    const { password, verificationToken, verificationExpires, ...safeUser } =
-      user;
-    const cacheKey = `user:email:${safeUser.email}`;
-    await this.redisServer.set(cacheKey, JSON.stringify(safeUser), ttl);
+  private async getCachedUser(email: string) {
+    return await this.cacheManager.get<any>(`user:email:${email}`);
   }
 
-  private async getCachedUser(email: string) {
-    const cacheKey = `user:email:${email}`;
-    const cached = await this.redisServer.get<string>(cacheKey);
-    return cached ? JSON.parse(cached) : null;
+  private async getCachedUserById(userId: string) {
+    return await this.cacheManager.get<any>(`user:id:${userId}`);
   }
+
+  private async cacheUser(user: any) {
+    const ttl = 15 * 60 * 1000; // 15 minutes
+    // Cache manager automatically stringifies - don't do JSON.stringify
+    await this.cacheManager.set(`user:email:${user.email}`, user, ttl);
+    await this.cacheManager.set(`user:id:${user.id}`, user, ttl);
+  }
+
+  private async clearCachedUser(user: any) {
+    await this.cacheManager.del(`user:email:${user.email}`);
+    await this.cacheManager.del(`user:id:${user.id}`);
+  }
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   async signUp(
     data: SignUpDto,
@@ -243,6 +253,10 @@ export class AuthService {
     }
   }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
   async verifyEmail(token: string) {
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
@@ -277,6 +291,11 @@ export class AuthService {
     };
   }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // Sign In
   async signIn(data: SignInDto) {
     const { email, password } = data;
 
@@ -368,23 +387,42 @@ export class AuthService {
 
     const token = this.generateToken(payload);
 
+    // Only return token, no user data
     return {
-      data: {
-        users: [
-          {
-            ...user,
-          },
-        ],
-      },
       token,
+      // Remove the users array - client will fetch from /me
     };
   }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
   validateUser = async (payload: any) => {
-    console.log('JWT payload:', payload);
     if (!payload) {
       throw new BadRequestException('Invalid payload');
     }
+
+    // Try to get user from cache first
+    const cachedUser = await this.getCachedUserById(payload.sub);
+
+    if (cachedUser) {
+      // Verify token version from cache
+      if (payload.tokenVersion !== cachedUser.tokenVersion) {
+        // Token version mismatch - clear cache and reject
+        await this.clearCachedUser(cachedUser.email);
+        this.logger.error(
+          `Token version mismatch for user ID ${cachedUser.id}. Token invalidated.`,
+        );
+        throw new UnauthorizedException(
+          'Token has been invalidated. Please sign in again.',
+        );
+      }
+
+      return cachedUser;
+    }
+
+    // Cache miss - fetch from database
     const [user] = await this.dbServer
       .select()
       .from(UserTable)
@@ -408,6 +446,9 @@ export class AuthService {
       );
     }
 
-    return user; // this becomes req.user
+    // Cache the user for future requests
+    await this.cacheUser(user);
+
+    return user;
   };
 }
