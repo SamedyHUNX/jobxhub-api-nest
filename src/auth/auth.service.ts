@@ -1,6 +1,7 @@
 import { DrizzleService } from '@/drizzle/drizzle.service';
 import { S3Service } from '@/s3/s3.service';
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   Inject,
@@ -20,7 +21,6 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { InngestClientService } from '@/inngest/inngest.service';
 import { ConfigService } from '@/config/config.service';
-import { first } from 'rxjs';
 
 @Injectable()
 export class AuthService {
@@ -450,5 +450,113 @@ export class AuthService {
     await this.cacheUser(user);
 
     return user;
+  };
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  forgotPassword = async (
+    email: string,
+    acceptLanguage: string,
+    ipAddress: string,
+  ) => {
+    // 1. Rate limit by IP (global)
+    const ipRateLimitKey = `pwd_reset_ip:${ipAddress}`;
+    const currentIpAttempts =
+      (await this.cacheManager.get<number>(ipRateLimitKey)) || 0;
+    const ipAttempts = currentIpAttempts + 1;
+
+    // Set with TTL of 3600 seconds (1 hour) - convert to milliseconds
+    await this.cacheManager.set(ipRateLimitKey, ipAttempts, 3600 * 1000);
+
+    if (ipAttempts > 3) {
+      this.logger.warn(
+        `Too many password reset requests from IP: ${ipAddress}`,
+      );
+      throw new BadGatewayException('Too many requests');
+    }
+
+    // 2. Rate limit by email
+    const emailRateLimitKey = `pwd_reset_email:${email}`;
+    const currentEmailAttempts =
+      (await this.cacheManager.get<number>(emailRateLimitKey)) || 0;
+    const emailAttempts = currentEmailAttempts + 1;
+
+    await this.cacheManager.set(emailRateLimitKey, emailAttempts, 3600 * 1000);
+
+    if (emailAttempts > 3) {
+      // Still return success to prevent enumeration
+      this.logger.warn(`Rate limit exceeded for email: ${email}`);
+      return {
+        status: 'success',
+        code: 200,
+        message: 'Password reset email sent. Please check your inbox',
+      };
+    }
+
+    // Find user by email
+    const [user] = await this.dbServer
+      .select()
+      .from(UserTable)
+      .where(eq(UserTable.email, email))
+      .limit(1);
+
+    if (!user) {
+      this.logger.warn(
+        `Password reset requested for non-existent email: ${email} at ${this.getTimestamp()}!`,
+      );
+      return {
+        status: 'success',
+        code: 200,
+        message: 'Password reset email sent. Please check your inbox',
+      };
+    }
+
+    // 3. Check for recent token
+    if (
+      user.resetPasswordExpires &&
+      user.resetPasswordExpires > new Date(Date.now() - 300000)
+    ) {
+      return {
+        status: 'success',
+        code: 200,
+        message: 'Password reset email sent. Please check your inbox',
+      };
+    }
+
+    // Generate reset token
+    const {
+      token: resetToken,
+      hashedToken,
+      expiresAt,
+    } = await this.generateAndHashToken(15); // 15 minutes expiration
+
+    // Store hashed token and expiration in DB
+    await this.dbServer
+      .update(UserTable)
+      .set({
+        resetPasswordToken: hashedToken,
+        resetPasswordExpires: expiresAt,
+      })
+      .where(eq(UserTable.id, user.id));
+
+    // Send email with reset link
+    const resetUrl = `${this.configService.clientUrl}/${acceptLanguage}/reset-password?token=${resetToken}`;
+
+    // TRIGGER INNGEST EVENT
+    await this.inngest.send({
+      name: 'jobxhub/user.reset_password_requested',
+      data: {
+        email,
+        resetUrl,
+        acceptLanguage,
+      },
+    });
+
+    return {
+      status: 'success',
+      code: 200,
+      message: 'Password reset email sent. Please check your inbox',
+    };
   };
 }

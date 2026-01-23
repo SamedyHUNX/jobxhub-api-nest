@@ -4,6 +4,9 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
+  HttpStatus,
+  Ip,
   Post,
   Req,
   Res,
@@ -13,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { SignInDto, SignUpDto } from './dtos/auth.dto';
+import { RequestPasswordResetDto, SignInDto, SignUpDto } from './dtos/auth.dto';
 import { ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { JwtAuthGuard } from './jwt/jwt.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -77,5 +80,16 @@ export class AuthController {
     return plainToInstance(UserResponseDto, user, {
       excludeExtraneousValues: true,
     });
+  }
+
+  // POST forgot-password
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async requestPasswordReset(
+    @Body() { email }: RequestPasswordResetDto,
+    @Headers('accept-language') acceptLanguage: string,
+    @Ip() ipAddress: string,
+  ) {
+    return this.authService.forgotPassword(email, acceptLanguage, ipAddress);
   }
 }
