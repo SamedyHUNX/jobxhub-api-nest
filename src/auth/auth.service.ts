@@ -830,8 +830,6 @@ export class AuthService {
     this.logger.log(`Cleared failed attempts for ${email}`);
   }
 
-
-
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1124,9 +1122,69 @@ export class AuthService {
 
     this.logger.log(`Password successfully reset for user ID: ${user.id}`);
     return {
-      status: 'success',
-      code: 200,
       message: 'Password reset successfully',
     };
   };
+
+  async signOut(userId: string) {
+    try {
+      // 1. Get user data to clear cache properly
+      const [user] = await this.dbServer
+        .select({
+          id: UserTable.id,
+          email: UserTable.email,
+          tokenVersion: UserTable.tokenVersion,
+        })
+        .from(UserTable)
+        .where(eq(UserTable.id, userId))
+        .limit(1);
+
+      if (!user) {
+        this.logger.warn(`Sign out attempted for non-existent user: ${userId}`);
+        return {
+          message: 'Signed out successfully',
+        };
+      }
+
+      // 2. Increment token version to invalidate all existing tokens
+      await this.dbServer
+        .update(UserTable)
+        .set({
+          tokenVersion: user.tokenVersion + 1,
+        })
+        .where(eq(UserTable.id, userId));
+
+      // 3. Clear user cache
+      await this.invalidateUserCache(user.email, user.id);
+
+      // 4. Invalidate all sessions
+      await this.invalidateAllUserSessions(user.id);
+
+      // 5. Log the sign-out event
+      this.logger.log(
+        `User ${user.email} (ID: ${userId}) signed out successfully`,
+      );
+
+      return {
+        message: 'Signed out successfully',
+      };
+    } catch (error) {
+      // Log error but don't fail the sign-out
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'sign_out',
+        },
+        extra: {
+          userId,
+        },
+      });
+
+      this.logger.error(`Sign out error for user ${userId}: ${error?.message}`);
+
+      // Still return success - user experience is more important
+      return {
+        message: 'Signed out successfully',
+      };
+    }
+  }
 }

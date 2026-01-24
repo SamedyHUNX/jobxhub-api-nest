@@ -28,14 +28,13 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { plainToInstance } from 'class-transformer';
 import { UserResponseDto } from '@/users/dtos/user-response.dto';
 import type { Response } from 'express';
-import { AuthGuard } from '@nestjs/passport';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   // Sign Up (/api/auth/signup)
-  @Post('signup')
+  @Post('sign-up')
   @UseInterceptors(
     FileInterceptor('image', {
       limits: { fileSize: 5 * 1024 * 1024 },
@@ -56,7 +55,7 @@ export class AuthController {
   }
 
   // Sign In (/api/auth/signin)
-  @Post('signin')
+  @Post('sign-in')
   async signIn(
     @Body() data: SignInDto,
     @Res() res: Response,
@@ -112,5 +111,23 @@ export class AuthController {
       newPassword,
       confirmNewPassword,
     );
+  }
+
+  @Post('sign-out')
+  @UseGuards(JwtAuthGuard)
+  async signOut(@Res() res: Response, @CurrentUser() user: any) {
+    await this.authService.signOut(user.id);
+
+    // Clear the cookie
+    res.clearCookie('access_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
+    });
+
+    return res.json({
+      message: 'Signed out successfully',
+    });
   }
 }
