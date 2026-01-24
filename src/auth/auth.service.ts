@@ -34,7 +34,7 @@ export class AuthService {
     private s3Service: S3Service,
     private inngestService: InngestClientService,
     private configService: ConfigService,
-  ) { }
+  ) {}
 
   private get redisServer() {
     if (!this.cacheManager) {
@@ -142,6 +142,22 @@ export class AuthService {
 
     this.logger.log(`All sessions invalidated for user ID: ${userId}`);
   }
+
+  private addConstantTimeDelay = async (startTime: number) => {
+    const TARGET_RESPONSE_TIME = 600;
+    const JITTER = 100;
+
+    const elapsed = Date.now() - startTime;
+    const delay = Math.max(
+      0,
+      TARGET_RESPONSE_TIME - elapsed + Math.random() * JITTER,
+    );
+
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  };
+
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -395,7 +411,7 @@ export class AuthService {
 
       this.logger.log(`Email successfully verified for user ID: ${user.id}`);
 
-      // Optional: Send welcome email or trigger onboarding
+      // Send welcome email or trigger onboarding
       try {
         await this.inngest.send({
           name: 'jobxhub/user.verified',
@@ -483,7 +499,9 @@ export class AuthService {
       }
 
       if (!dbStatus.isVerified) {
-        throw new UnauthorizedException('Account is not verified. Please check your inbox to verify');
+        throw new UnauthorizedException(
+          'Account is not verified. Please check your inbox to verify',
+        );
       }
 
       const { password: dbPassword, ...status } = dbStatus;
@@ -511,7 +529,9 @@ export class AuthService {
       }
 
       if (!dbUser.isVerified) {
-        throw new UnauthorizedException('Account is not verified. Please check your inbox to verify');
+        throw new UnauthorizedException(
+          'Account is not verified. Please check your inbox to verify',
+        );
       }
 
       passwordHash = dbUser.password;
@@ -607,116 +627,175 @@ export class AuthService {
     acceptLanguage: string,
     ipAddress: string,
   ) => {
-    // 1. Rate limit by IP (global)
-    const ipRateLimitKey = `pwd_reset_ip:${ipAddress}`;
-    const currentIpAttempts =
-      (await this.cacheManager.get<number>(ipRateLimitKey)) || 0;
-    const ipAttempts = currentIpAttempts + 1;
+    const startTime = Date.now();
+    let userExists = false;
+    let shouldSendEmail = false;
 
-    // Set with TTL of 3600 seconds (1 hour) - convert to milliseconds
-    await this.cacheManager.set(ipRateLimitKey, ipAttempts, 3600 * 1000);
+    try {
+      // 1. Rate limit by IP (global)
+      const ipRateLimitKey = `pwd_reset_ip:${ipAddress}`;
+      const currentIpAttempts =
+        (await this.cacheManager.get<number>(ipRateLimitKey)) || 0;
+      const ipAttempts = currentIpAttempts + 1;
 
-    if (ipAttempts > 10) {
-      this.logger.warn(
-        `Too many password reset requests from IP: ${ipAddress}`,
+      await this.cacheManager.set(ipRateLimitKey, ipAttempts, 3600 * 1000);
+
+      if (ipAttempts > 3) {
+        this.logger.warn(
+          `Too many password reset requests from IP: ${ipAddress}`,
+        );
+
+        // Add artificial delay before throwing to prevent timing analysis
+        await this.addConstantTimeDelay(startTime);
+
+        throw new HttpException(
+          'Too many requests',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
+      // 2. Rate limit by email
+      const emailRateLimitKey = `pwd_reset_email:${email}`;
+      const currentEmailAttempts =
+        (await this.cacheManager.get<number>(emailRateLimitKey)) || 0;
+      const emailAttempts = currentEmailAttempts + 1;
+
+      await this.cacheManager.set(
+        emailRateLimitKey,
+        emailAttempts,
+        3600 * 1000,
       );
-      throw new HttpException(
-        'Too many requests',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
 
-    // 2. Rate limit by email
-    const emailRateLimitKey = `pwd_reset_email:${email}`;
-    const currentEmailAttempts =
-      (await this.cacheManager.get<number>(emailRateLimitKey)) || 0;
-    const emailAttempts = currentEmailAttempts + 1;
+      const emailRateLimited = emailAttempts > 3;
 
-    await this.cacheManager.set(emailRateLimitKey, emailAttempts, 3600 * 1000);
+      // Find user by email (always execute)
+      const [user] = await this.dbServer
+        .select()
+        .from(UserTable)
+        .where(eq(UserTable.email, email))
+        .limit(1);
 
-    if (emailAttempts > 3) {
-      // Still return success to prevent enumeration
-      this.logger.warn(`Rate limit exceeded for email: ${email}`);
+      userExists = !!user;
+
+      // Determine if we should actually send email
+      shouldSendEmail =
+        userExists &&
+        !emailRateLimited &&
+        (!user.resetPasswordExpires ||
+          user.resetPasswordExpires <= new Date(Date.now() - 300000));
+
+      // Always generate token (even if not used) to maintain constant time
+      const {
+        token: resetToken,
+        hashedToken,
+        expiresAt,
+      } = await this.generateAndHashToken(15);
+
+      // Update database if user exists and should send email
+      if (shouldSendEmail) {
+        await this.dbServer
+          .update(UserTable)
+          .set({
+            resetPasswordToken: hashedToken,
+            resetPasswordExpires: expiresAt,
+          })
+          .where(eq(UserTable.id, user.id));
+
+        const publicUrl = this.configService.publicUrl;
+        if (!publicUrl) {
+          this.logger.error('CLIENT_URLS is not configured');
+          throw new HttpException(
+            'Server configuration error',
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
+
+        const resetUrl = `${publicUrl}/${acceptLanguage}/reset-password?token=${resetToken}`;
+
+        // Send email asynchronously (to maintain timing)
+        this.inngest
+          .send({
+            name: 'jobxhub/user.reset_password',
+            data: {
+              email,
+              resetUrl,
+              acceptLanguage,
+            },
+          })
+          .catch((error) => {
+            // Log error to Sentry
+            Sentry.captureException(error, {
+              tags: {
+                operation: 'password_reset',
+                email_sent: 'false',
+              },
+              extra: {
+                email,
+                acceptLanguage,
+              },
+            });
+            this.logger.error('Failed to send password reset email', error);
+          });
+      }
+
+      // Log different scenarios to Sentry for monitoring
+      if (!userExists) {
+        this.logger.warn(
+          `Password reset requested for non-existent email: ${email} at ${this.getTimestamp()}`,
+        );
+        Sentry.captureMessage('Password reset for non-existent email', {
+          level: 'warning',
+          tags: {
+            operation: 'password_reset',
+            user_exists: 'false',
+          },
+          extra: {
+            email,
+            ipAddress,
+          },
+        });
+      } else if (emailRateLimited) {
+        this.logger.warn(`Rate limit exceeded for email: ${email}`);
+        Sentry.captureMessage('Password reset rate limit exceeded', {
+          level: 'warning',
+          tags: {
+            operation: 'password_reset',
+            rate_limited: 'true',
+          },
+          extra: {
+            email,
+            ipAddress,
+            attempts: emailAttempts,
+          },
+        });
+      }
+
+      // Add constant-time delay to normalize response time
+      await this.addConstantTimeDelay(startTime);
+
+      // Always return same response
       return {
         status: 'success',
         code: 200,
         message: 'Password reset email sent. Please check your inbox',
       };
+    } catch (error) {
+      // Capture unexpected errors in Sentry
+      if (!(error instanceof HttpException)) {
+        Sentry.captureException(error, {
+          tags: {
+            operation: 'password_reset',
+          },
+          extra: {
+            email,
+            ipAddress,
+            acceptLanguage,
+          },
+        });
+      }
+
+      throw error;
     }
-
-    // Find user by email
-    const [user] = await this.dbServer
-      .select()
-      .from(UserTable)
-      .where(eq(UserTable.email, email))
-      .limit(1);
-
-    if (!user) {
-      this.logger.warn(
-        `Password reset requested for non-existent email: ${email} at ${this.getTimestamp()}!`,
-      );
-      return {
-        status: 'success',
-        code: 200,
-        message: 'Password reset email sent. Please check your inbox',
-      };
-    }
-
-    // 3. Check for recent token
-    if (
-      user.resetPasswordExpires &&
-      user.resetPasswordExpires > new Date(Date.now() - 300000)
-    ) {
-      return {
-        status: 'success',
-        code: 200,
-        message: 'Password reset email sent. Please check your inbox',
-      };
-    }
-
-    // Generate reset token
-    const {
-      token: resetToken,
-      hashedToken,
-      expiresAt,
-    } = await this.generateAndHashToken(15); // 15 minutes expiration
-
-    // Store hashed token and expiration in DB
-    await this.dbServer
-      .update(UserTable)
-      .set({
-        resetPasswordToken: hashedToken,
-        resetPasswordExpires: expiresAt,
-      })
-      .where(eq(UserTable.id, user.id));
-
-    const clientUrls = this.configService.get<string>('CLIENT_URLS');
-    if (!clientUrls) {
-      this.logger.error('CLIENT_URLS is not configured');
-      throw new HttpException(
-        'Server configuration error',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-
-    // Send email with reset link
-    const resetUrl = `${clientUrls.split(',')[0]}/${acceptLanguage}/reset-password?token=${resetToken}`;
-
-    // TRIGGER INNGEST EVENT
-    await this.inngest.send({
-      name: 'jobxhub/user.reset_password',
-      data: {
-        email,
-        resetUrl,
-        acceptLanguage,
-      },
-    });
-
-    return {
-      status: 'success',
-      code: 200,
-      message: 'Password reset email sent. Please check your inbox',
-    };
   };
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -728,7 +807,6 @@ export class AuthService {
     newPassword: string,
     confirmNewPassword: string,
   ) => {
-    console.log('fjhiksdjkfhskhjd ');
     if (newPassword !== confirmNewPassword) {
       this.logger.error(`User provided non-matching passwords`);
       throw new BadRequestException('Passwords must match');
@@ -751,9 +829,7 @@ export class AuthService {
 
     if (!user) {
       this.logger.error('Invalid or expired password reset token used');
-      throw new UnauthorizedException(
-        "Invalid or expired verification token",
-      );
+      throw new UnauthorizedException('Invalid or expired verification token');
     }
 
     // Hash new password
