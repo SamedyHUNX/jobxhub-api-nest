@@ -468,11 +468,13 @@ export class AuthService {
     }
 
     try {
-      // 1. Check IP-based rate limiting (global protection)
-      await this.checkIpRateLimit(ipAddress);
+      if (!this.configService.isProduction) {
+        // 1. Check IP-based rate limiting (global protection)
+        await this.checkIpRateLimit(ipAddress);
 
-      // 2. Check email-based rate limiting (account protection)
-      await this.checkEmailRateLimit(email);
+        // 2. Check email-based rate limiting (account protection)
+        await this.checkEmailRateLimit(email);
+      }
 
       // 3. Check for account lockout
       const isLocked = await this.isAccountLocked(email);
