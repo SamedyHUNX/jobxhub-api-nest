@@ -227,7 +227,7 @@ export class AuthService {
         expiresAt: verificationExpires,
       } = await this.generateAndHashToken(60 * 24);
 
-      const frontendUrl = this.configService.clientUrl;
+      const frontendUrl = this.configService.publicUrl;
       const locale = acceptLanguage || 'en';
 
       if (!frontendUrl) {
@@ -238,22 +238,40 @@ export class AuthService {
 
       const verificationUrl = `${frontendUrl}/${locale}/verify-email?token=${verificationToken}`;
 
-      const [user] = await this.dbServer
-        .insert(UserTable)
-        .values({
-          username,
-          email,
-          firstName: capitalizedFirstName,
-          lastName: capitalizedLastName,
-          dateOfBirth: new Date(dateOfBirth),
-          password: hashedPassword,
-          phoneNumber,
-          imageUrl,
-          userRole: 'USER',
-          verificationToken: hashedVerificationToken,
-          verificationExpires: verificationExpires,
-        })
-        .returning();
+      let user;
+
+      try {
+        [user] = await this.dbServer
+          .insert(UserTable)
+          .values({
+            username,
+            email,
+            firstName: capitalizedFirstName,
+            lastName: capitalizedLastName,
+            dateOfBirth: new Date(dateOfBirth),
+            password: hashedPassword,
+            phoneNumber,
+            imageUrl,
+            userRole: 'USER',
+            verificationToken: hashedVerificationToken,
+            verificationExpires: verificationExpires,
+          })
+          .returning();
+      } catch (dbError: any) {
+        await this.s3Server.deleteFile(imageKey);
+
+        // Handle unique constraint violation
+        if (dbError.code === '23505') {
+          // PostgreSQL unique violation
+          if (dbError.constraint?.includes('email')) {
+            throw new ConflictException('Email already exists');
+          }
+          if (dbError.constraint?.includes('username')) {
+            throw new ConflictException('Username already taken');
+          }
+        }
+        throw dbError;
+      }
 
       try {
         await this.inngest.send({
@@ -269,9 +287,26 @@ export class AuthService {
             acceptLanguage: locale,
           },
         });
-      } catch (err: any) {
+      } catch (inngestError: any) {
+        // Rollback: Delete the user we just created
+        await this.dbServer.delete(UserTable).where(eq(UserTable.id, user.id));
+
+        // Delete the uploaded image
+        await this.s3Server.deleteFile(imageKey);
+
+        Sentry.captureException(inngestError, {
+          extra: {
+            userId: user.id,
+            email: user.email,
+            context: 'signup_inngest_failed',
+          },
+        });
+
         this.logger.error(
-          `Failed to emit user.created event: ${err?.message ?? err}`,
+          `Failed to emit user.created event: ${inngestError?.message ?? inngestError}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to complete signup. Please try again',
         );
       }
 
@@ -279,16 +314,15 @@ export class AuthService {
         message: 'User signed up successfully. Please verify your email.',
       };
     } catch (error) {
+      // Cleanup orphaned file
       this.logger.warn(
         `Database insertion failed. Deleting orphaned file: ${imageKey}`,
       );
-      try {
-        await this.s3Server.deleteFile(imageKey);
-      } catch (s3Error: any) {
-        this.logger.error(
-          `Failed to delete orphaned file ${imageKey}: ${s3Error.message}`,
+      await this.s3Server
+        .deleteFile(imageKey)
+        .catch((e) =>
+          this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),
         );
-      }
       throw error;
     }
   }
@@ -298,6 +332,11 @@ export class AuthService {
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   async verifyEmail(token: string) {
+    // Validate token format before processing
+    if (!token) {
+      throw new BadRequestException('Invalid token format');
+    }
+
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
     const [user] = await this.dbServer
@@ -312,23 +351,91 @@ export class AuthService {
       .limit(1);
 
     if (!user) {
+      // Log failed verification attempts for security monitoring
+      this.logger.warn(
+        `Failed email verification attempt with token: ${token.substring(0, 8)}...`,
+      );
+
+      // Check if it's an expired token (user exists but token expired)
+      const [expiredUser] = await this.dbServer
+        .select()
+        .from(UserTable)
+        .where(eq(UserTable.verificationToken, hashedToken))
+        .limit(1);
+
+      if (expiredUser) {
+        // Token exists but expired - option to resend
+        throw new UnauthorizedException(
+          'Verification token has expired. Please request a new verification email',
+        );
+      }
+
       throw new UnauthorizedException('Invalid or expired verification token');
     }
 
-    await this.dbServer
-      .update(UserTable)
-      .set({
-        isVerified: true,
-        verificationToken: null,
-        verificationExpires: null,
-      })
-      .where(eq(UserTable.id, user.id));
+    // Check if already verified (prevent replay attacks)
+    if (user.isVerified) {
+      this.logger.warn(
+        `Attempt to verify already verified email: ${user.email}`,
+      );
+      return {
+        message: 'Email already verified',
+      };
+    }
 
-    this.logger.log(`Email successfully verified for user ID: ${user.id}`);
+    try {
+      await this.dbServer
+        .update(UserTable)
+        .set({
+          isVerified: true,
+          verificationToken: null,
+          verificationExpires: null,
+        })
+        .where(eq(UserTable.id, user.id));
 
-    return {
-      message: 'Email verified successfully',
-    };
+      this.logger.log(`Email successfully verified for user ID: ${user.id}`);
+
+      // Optional: Send welcome email or trigger onboarding
+      try {
+        await this.inngest.send({
+          name: 'jobxhub/user.verified',
+          data: {
+            userId: user.id,
+            email: user.email,
+          },
+        });
+      } catch (inngestError) {
+        // Don't fail verification if event fails, just log it
+        Sentry.captureException(inngestError, {
+          extra: {
+            userId: user.id,
+            email: user.email,
+            context: 'email_verification_event_failed',
+          },
+        });
+        this.logger.error(
+          `Failed to emit user.verified event: ${inngestError?.message}`,
+        );
+      }
+
+      return {
+        message: 'Email verified successfully',
+      };
+    } catch (error) {
+      Sentry.captureException(error, {
+        extra: {
+          userId: user.id,
+          email: user.email,
+          context: 'email_verification_update_failed',
+        },
+      });
+      this.logger.error(
+        `Failed to update verification status: ${error?.message}`,
+      );
+      throw new InternalServerErrorException(
+        'Failed to verify email. Please try again',
+      );
+    }
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////

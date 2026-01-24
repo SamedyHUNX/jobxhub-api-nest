@@ -126,6 +126,10 @@ export class ConfigService {
     return this.nodeEnv === 'production';
   }
 
+  get publicUrl(): string {
+    return this.configService.getOrThrow<string>('PUBLIC_URL');
+  }
+
   //////////////////////////////////////////////////////////////////////////////////
 
   // Inngest
