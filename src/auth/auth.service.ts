@@ -459,106 +459,378 @@ export class AuthService {
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   // Sign In
-  async signIn(data: SignInDto) {
+  async signIn(data: SignInDto, ipAddress: string) {
     const { email, password } = data;
+    const startTime = Date.now();
 
     if (!email || !password) {
       throw new BadRequestException('Email and password are required');
     }
 
-    const cachedUser = await this.getCachedUser(email);
+    try {
+      // 1. Check IP-based rate limiting (global protection)
+      await this.checkIpRateLimit(ipAddress);
 
-    let user;
-    let passwordHash: string;
+      // 2. Check email-based rate limiting (account protection)
+      await this.checkEmailRateLimit(email);
 
-    if (cachedUser) {
-      user = cachedUser;
-
-      const [dbStatus] = await this.dbServer
-        .select({
-          isBanned: UserTable.isBanned,
-          isDisabled: UserTable.isDisabled,
-          isVerified: UserTable.isVerified,
-          tokenVersion: UserTable.tokenVersion,
-          password: UserTable.password,
-        })
-        .from(UserTable)
-        .where(eq(UserTable.email, email))
-        .limit(1);
-
-      if (!dbStatus) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      if (dbStatus.isBanned) {
-        throw new UnauthorizedException('Account has been banned');
-      }
-
-      if (dbStatus.isDisabled) {
-        throw new UnauthorizedException('Account has been disabled');
-      }
-
-      if (!dbStatus.isVerified) {
+      // 3. Check for account lockout
+      const isLocked = await this.isAccountLocked(email);
+      if (isLocked) {
+        await this.addConstantTimeDelay(startTime);
         throw new UnauthorizedException(
-          'Account is not verified. Please check your inbox to verify',
+          'Account temporarily locked due to multiple failed login attempts. Please try again later or reset your password.',
         );
       }
 
-      const { password: dbPassword, ...status } = dbStatus;
-      passwordHash = dbPassword;
-      user = { ...user, ...status };
+      const cachedUser = await this.getCachedUser(email);
 
-      await this.cacheUser(user);
-    } else {
-      const [dbUser] = await this.dbServer
-        .select()
-        .from(UserTable)
-        .where(eq(UserTable.email, email))
-        .limit(1);
+      let user;
+      let passwordHash: string;
 
-      if (!dbUser) {
+      if (cachedUser) {
+        user = cachedUser;
+
+        const [dbStatus] = await this.dbServer
+          .select({
+            isBanned: UserTable.isBanned,
+            isDisabled: UserTable.isDisabled,
+            isVerified: UserTable.isVerified,
+            tokenVersion: UserTable.tokenVersion,
+            password: UserTable.password,
+          })
+          .from(UserTable)
+          .where(eq(UserTable.email, email))
+          .limit(1);
+
+        if (!dbStatus) {
+          await this.handleFailedLogin(email, ipAddress, 'user_not_found');
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Invalid credentials');
+        }
+
+        if (dbStatus.isBanned) {
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Account has been banned');
+        }
+
+        if (dbStatus.isDisabled) {
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Account has been disabled');
+        }
+
+        if (!dbStatus.isVerified) {
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException(
+            'Account is not verified. Please check your inbox to verify',
+          );
+        }
+
+        const { password: dbPassword, ...status } = dbStatus;
+        passwordHash = dbPassword;
+        user = { ...user, ...status };
+
+        await this.cacheUser(user);
+      } else {
+        const [dbUser] = await this.dbServer
+          .select()
+          .from(UserTable)
+          .where(eq(UserTable.email, email))
+          .limit(1);
+
+        if (!dbUser) {
+          await this.handleFailedLogin(email, ipAddress, 'user_not_found');
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Invalid credentials');
+        }
+
+        if (dbUser.isBanned) {
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Account has been banned');
+        }
+
+        if (dbUser.isDisabled) {
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Account has been disabled');
+        }
+
+        if (!dbUser.isVerified) {
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException(
+            'Account is not verified. Please check your inbox to verify',
+          );
+        }
+
+        passwordHash = dbUser.password;
+        user = dbUser;
+
+        await this.cacheUser(user);
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, passwordHash);
+
+      if (!isPasswordValid) {
+        await this.handleFailedLogin(email, ipAddress, 'invalid_password');
+        await this.addConstantTimeDelay(startTime);
         throw new UnauthorizedException('Invalid credentials');
       }
 
-      if (dbUser.isBanned) {
-        throw new UnauthorizedException('Account has been banned');
+      // Successful login - clear failed attempts
+      await this.clearFailedAttempts(email, ipAddress);
+
+      const payload = {
+        email: user.email,
+        sub: user.id,
+        tokenVersion: user.tokenVersion,
+      };
+
+      const token = this.generateToken(payload);
+
+      // Log successful login
+      this.logger.log(`Successful login for user: ${email}`);
+
+      await this.addConstantTimeDelay(startTime);
+
+      return {
+        token,
+      };
+    } catch (error) {
+      // Capture security-related errors in Sentry
+      if (error instanceof UnauthorizedException) {
+        Sentry.captureMessage('Failed login attempt', {
+          level: 'warning',
+          tags: {
+            operation: 'sign_in',
+            error_type: error.message,
+          },
+          extra: {
+            email,
+            ipAddress,
+          },
+        });
+      } else {
+        Sentry.captureException(error, {
+          tags: {
+            operation: 'sign_in',
+          },
+          extra: {
+            email,
+            ipAddress,
+          },
+        });
       }
 
-      if (dbUser.isDisabled) {
-        throw new UnauthorizedException('Account has been disabled');
-      }
-
-      if (!dbUser.isVerified) {
-        throw new UnauthorizedException(
-          'Account is not verified. Please check your inbox to verify',
-        );
-      }
-
-      passwordHash = dbUser.password;
-      user = dbUser;
-
-      await this.cacheUser(user);
+      throw error;
     }
-
-    const isPasswordValid = await bcrypt.compare(password, passwordHash);
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const payload = {
-      email: user.email,
-      sub: user.id,
-      tokenVersion: user.tokenVersion,
-    };
-
-    const token = this.generateToken(payload);
-
-    // Only return token, no user data
-    return {
-      token,
-    };
   }
+
+  /**
+   * Check IP-based rate limiting
+   * Prevents distributed brute force attacks
+   */
+  private async checkIpRateLimit(ipAddress: string): Promise<void> {
+    const ipRateLimitKey = `login_ip:${ipAddress}`;
+    const ipAttempts =
+      (await this.cacheManager.get<number>(ipRateLimitKey)) || 0;
+
+    // Allow 10 attempts per IP per hour
+    if (ipAttempts >= 10) {
+      this.logger.warn(`IP rate limit exceeded: ${ipAddress}`);
+
+      Sentry.captureMessage('IP rate limit exceeded on login', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          rate_limit_type: 'ip',
+        },
+        extra: {
+          ipAddress,
+          attempts: ipAttempts,
+        },
+      });
+
+      throw new HttpException(
+        'Too many login attempts from this IP address. Please try again later.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // Increment counter with 1-hour TTL
+    await this.cacheManager.set(ipRateLimitKey, ipAttempts + 1, 3600 * 1000);
+  }
+
+  /**
+   * Check email-based rate limiting
+   * Prevents targeted attacks on specific accounts
+   */
+  private async checkEmailRateLimit(email: string): Promise<void> {
+    const emailRateLimitKey = `login_email:${email}`;
+    const emailAttempts =
+      (await this.cacheManager.get<number>(emailRateLimitKey)) || 0;
+
+    // Allow 5 attempts per email per 15 minutes
+    if (emailAttempts >= 5) {
+      this.logger.warn(`Email rate limit exceeded: ${email}`);
+
+      Sentry.captureMessage('Email rate limit exceeded on login', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          rate_limit_type: 'email',
+        },
+        extra: {
+          email,
+          attempts: emailAttempts,
+        },
+      });
+
+      throw new HttpException(
+        'Too many login attempts for this account. Please try again later or reset your password.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // Increment counter with 15-minute TTL
+    await this.cacheManager.set(
+      emailRateLimitKey,
+      emailAttempts + 1,
+      900 * 1000,
+    );
+  }
+
+  /**
+   * Check if account is locked due to failed attempts
+   * Implements progressive lockout
+   */
+  private async isAccountLocked(email: string): Promise<boolean> {
+    const lockKey = `account_lock:${email}`;
+    const lockData = await this.cacheManager.get<{
+      lockedUntil: number;
+      attempts: number;
+    }>(lockKey);
+
+    if (!lockData) {
+      return false;
+    }
+
+    // Check if lock has expired
+    if (Date.now() > lockData.lockedUntil) {
+      await this.cacheManager.del(lockKey);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Handle failed login attempts with progressive lockout
+   */
+  private async handleFailedLogin(
+    email: string,
+    ipAddress: string,
+    reason: string,
+  ): Promise<void> {
+    const failedAttemptsKey = `failed_login:${email}`;
+    const lockKey = `account_lock:${email}`;
+
+    // Get current failed attempts
+    const currentAttempts =
+      (await this.cacheManager.get<number>(failedAttemptsKey)) || 0;
+    const newAttempts = currentAttempts + 1;
+
+    // Store failed attempts with 30-minute TTL
+    await this.cacheManager.set(failedAttemptsKey, newAttempts, 1800 * 1000);
+
+    // Log failed attempt
+    this.logger.warn(
+      `Failed login attempt ${newAttempts} for ${email} from ${ipAddress}. Reason: ${reason}`,
+    );
+
+    // Progressive lockout strategy
+    if (newAttempts >= 10) {
+      // 10+ attempts: Lock for 1 hour
+      const lockDuration = 3600 * 1000;
+      await this.lockAccount(email, lockKey, newAttempts, lockDuration);
+
+      Sentry.captureMessage('Account locked - excessive failed attempts', {
+        level: 'error',
+        tags: {
+          operation: 'sign_in',
+          security_event: 'account_locked',
+        },
+        extra: {
+          email,
+          ipAddress,
+          attempts: newAttempts,
+          lockDuration: '1 hour',
+        },
+      });
+    } else if (newAttempts >= 7) {
+      // 7-9 attempts: Lock for 15 minutes
+      const lockDuration = 900 * 1000;
+      await this.lockAccount(email, lockKey, newAttempts, lockDuration);
+    } else if (newAttempts >= 5) {
+      // 5-6 attempts: Lock for 5 minutes
+      const lockDuration = 300 * 1000;
+      await this.lockAccount(email, lockKey, newAttempts, lockDuration);
+
+      Sentry.captureMessage('Account temporarily locked', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          security_event: 'temp_lock',
+        },
+        extra: {
+          email,
+          ipAddress,
+          attempts: newAttempts,
+        },
+      });
+    }
+  }
+
+  /**
+   * Lock account for specified duration
+   */
+  private async lockAccount(
+    email: string,
+    lockKey: string,
+    attempts: number,
+    duration: number,
+  ): Promise<void> {
+    await this.cacheManager.set(
+      lockKey,
+      {
+        lockedUntil: Date.now() + duration,
+        attempts,
+      },
+      duration,
+    );
+
+    this.logger.warn(
+      `Account locked: ${email} for ${duration / 1000} seconds after ${attempts} failed attempts`,
+    );
+  }
+
+  /**
+   * Clear failed login attempts on successful login
+   */
+  private async clearFailedAttempts(
+    email: string,
+    ipAddress: string,
+  ): Promise<void> {
+    const failedAttemptsKey = `failed_login:${email}`;
+    const lockKey = `account_lock:${email}`;
+
+    await Promise.all([
+      this.cacheManager.del(failedAttemptsKey),
+      this.cacheManager.del(lockKey),
+    ]);
+
+    this.logger.log(`Cleared failed attempts for ${email}`);
+  }
+
+
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -775,8 +1047,6 @@ export class AuthService {
 
       // Always return same response
       return {
-        status: 'success',
-        code: 200,
         message: 'Password reset email sent. Please check your inbox',
       };
     } catch (error) {

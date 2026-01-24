@@ -57,8 +57,12 @@ export class AuthController {
 
   // Sign In (/api/auth/signin)
   @Post('signin')
-  async signIn(@Body() data: SignInDto, @Res() res: Response) {
-    const { token } = await this.authService.signIn(data);
+  async signIn(
+    @Body() data: SignInDto,
+    @Res() res: Response,
+    @Ip() ipAddress: string,
+  ) {
+    const { token } = await this.authService.signIn(data, ipAddress);
 
     // Set HttpOnly Secure SameSite cookie
     res.cookie('access_token', token, {
