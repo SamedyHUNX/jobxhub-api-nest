@@ -28,13 +28,17 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { plainToInstance } from 'class-transformer';
 import { UserResponseDto } from '@/users/dtos/user-response.dto';
 import type { Response } from 'express';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   // Sign Up (/api/auth/signup)
   @Post('sign-up')
+  @ApiOperation({ summary: 'Create a user' })
+  @ApiResponse({ status: 200, description: 'Create a user' })
   @UseInterceptors(
     FileInterceptor('image', {
       limits: { fileSize: 5 * 1024 * 1024 },

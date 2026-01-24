@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from './config/config.service';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import './instrument';
 
@@ -9,6 +10,16 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   const clientUrls = configService.get<string>('CLIENT_URLS')?.split(',') || [];
+
+  const config = new DocumentBuilder()
+    .setTitle('JobXHub API')
+    .setDescription('API description')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
 
   app.setGlobalPrefix('api');
   app.use(cookieParser());
