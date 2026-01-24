@@ -34,7 +34,7 @@ export class AuthService {
     private s3Service: S3Service,
     private inngestService: InngestClientService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   private get redisServer() {
     if (!this.cacheManager) {
@@ -334,7 +334,7 @@ export class AuthService {
   async verifyEmail(token: string) {
     // Validate token format before processing
     if (!token) {
-      throw new BadRequestException('Invalid token format');
+      throw new BadRequestException('Invalid token');
     }
 
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
@@ -483,7 +483,7 @@ export class AuthService {
       }
 
       if (!dbStatus.isVerified) {
-        throw new UnauthorizedException('Please verify your email first');
+        throw new UnauthorizedException('Account is not verified. Please check your inbox to verify');
       }
 
       const { password: dbPassword, ...status } = dbStatus;
@@ -511,7 +511,7 @@ export class AuthService {
       }
 
       if (!dbUser.isVerified) {
-        throw new UnauthorizedException('Please verify your email first');
+        throw new UnauthorizedException('Account is not verified. Please check your inbox to verify');
       }
 
       passwordHash = dbUser.password;
@@ -674,8 +674,6 @@ export class AuthService {
       };
     }
 
-    console.log(user.resetPasswordExpires);
-
     // Generate reset token
     const {
       token: resetToken,
@@ -754,7 +752,7 @@ export class AuthService {
     if (!user) {
       this.logger.error('Invalid or expired password reset token used');
       throw new UnauthorizedException(
-        'Invalid or expired token. Please request a new one',
+        "Invalid or expired verification token",
       );
     }
 
