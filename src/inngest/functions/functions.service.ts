@@ -33,10 +33,10 @@ export class UserFunctionsService {
     this.forgotPasswordFunction =
       this.inngestClientService.inngest.createFunction(
         {
-          id: 'jobxhub/user.reset_password_requested',
+          id: 'jobxhub/user.reset_password',
           name: 'JobXHub - Handle Password Reset Request',
         },
-        { event: 'jobxhub/user.reset_password_requested' },
+        { event: 'jobxhub/user.reset_password' },
         async ({ event, step }) => {
           const { email, resetUrl, acceptLanguage } = event.data;
 

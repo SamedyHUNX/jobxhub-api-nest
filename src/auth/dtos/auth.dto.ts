@@ -36,6 +36,7 @@ export class SignUpDto {
   @IsString() @IsNotEmpty() firstName: string;
   @IsString() @IsNotEmpty() lastName: string;
   @IsDateString() @IsNotEmpty() dateOfBirth: string;
+  @IsString() @IsNotEmpty() phoneNumber: string;
 }
 
 export class SignInDto {
@@ -72,5 +73,5 @@ export class ResetPasswordDto {
   @IsNotEmpty()
   @MinLength(6)
   @Match('newPassword', { message: 'Passwords do not match' })
-  confirmPassword: string;
+  confirmNewPassword: string;
 }

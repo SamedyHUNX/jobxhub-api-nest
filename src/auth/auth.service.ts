@@ -1,10 +1,10 @@
 import { DrizzleService } from '@/drizzle/drizzle.service';
 import { S3Service } from '@/s3/s3.service';
-import { catchAsync } from '@/utils/catch-async';
-import { ResponseCode, ResponseHelper } from '@/utils/response-helper';
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -14,11 +14,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SignInDto, SignUpDto } from './dtos/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
-import {
-  capitalizeString,
-  hashPassword,
-  sanitizedEmail,
-} from '@/utils/helpers';
+import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
@@ -26,6 +22,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { InngestClientService } from '@/inngest/inngest.service';
 import { ConfigService } from '@/config/config.service';
+import * as Sentry from '@sentry/nestjs';
 
 @Injectable()
 export class AuthService {
@@ -41,20 +38,20 @@ export class AuthService {
 
   private get redisServer() {
     if (!this.cacheManager) {
-      this.logger.error(`Redis server is down at ${new Date().toISOString()}`);
-      throw new InternalServerErrorException(
-        ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
-      );
+      const message = `Redis server is down at ${this.getTimestamp()}`;
+      this.logger.error(message);
+      Sentry.captureException(new Error(message));
+      throw new InternalServerErrorException('Cache service unavailable');
     }
     return this.cacheManager;
   }
 
   private get inngest() {
     if (!this.inngestService || !this.inngestService.inngest) {
-      this.logger.error(`Inngest client is down at ${this.getTimestamp()}`);
-      throw new InternalServerErrorException(
-        ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
-      );
+      const message = `Inngest client is down at ${this.getTimestamp()}`;
+      this.logger.error(message);
+      Sentry.captureException(new Error(message));
+      throw new InternalServerErrorException('Event service unavailable');
     }
     return this.inngestService.inngest;
   }
@@ -65,22 +62,20 @@ export class AuthService {
 
   private get dbServer() {
     if (!this.dbService.db) {
-      this.logger.error(
-        `Database connection not established at ${this.getTimestamp()}`,
-      );
-      throw new InternalServerErrorException(
-        ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
-      );
+      const message = `Database connection not established at ${this.getTimestamp()}`;
+      this.logger.error(message);
+      Sentry.captureException(new Error(message));
+      throw new InternalServerErrorException('Database unavailable');
     }
     return this.dbService.db;
   }
 
   private get s3Server() {
     if (!this.s3Service) {
-      this.logger.error(`S3 service is down at ${this.getTimestamp()}`);
-      throw new InternalServerErrorException(
-        ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
-      );
+      const message = `S3 service is down at ${this.getTimestamp()}`;
+      this.logger.error(message);
+      Sentry.captureException(new Error(message));
+      throw new InternalServerErrorException('Storage service unavailable');
     }
     return this.s3Service;
   }
@@ -92,134 +87,177 @@ export class AuthService {
   private async generateAndHashToken(expireMinutes: number) {
     const token = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    // Set token and expiration based on provided minutes
     const expiresAt = new Date(Date.now() + expireMinutes * 60 * 1000);
     return { token, hashedToken, expiresAt };
   }
 
-  private async cacheUser(user: any, ttl: number = 900) {
-    // Exlude sensitive fields before caching
-    const { password, verificationToken, verificationExpires, ...safeUser } =
-      user;
-    user = safeUser;
-    const cacheKey = `user:email:${user.email}`;
-    await this.redisServer.set(cacheKey, JSON.stringify(user), ttl);
-  }
-
   private async getCachedUser(email: string) {
-    const cacheKey = `user:email:${email}`;
-    const cached = await this.redisServer.get<string>(cacheKey);
-    return cached ? JSON.parse(cached) : null;
+    return await this.cacheManager.get<any>(`user:email:${email}`);
   }
 
-  // Sign up function
-  signUp = catchAsync(
-    async (
-      data: SignUpDto,
-      imageFile: Express.Multer.File,
-      acceptLanguage: string,
-    ) => {
-      const { username, password, email, firstName, lastName, dateOfBirth } =
-        data;
+  private async getCachedUserById(userId: string) {
+    return await this.cacheManager.get<any>(`user:id:${userId}`);
+  }
 
-      // Validate required fields from DTO
-      const requiredFields = {
-        username,
-        password,
-        email,
-        firstName,
-        lastName,
-        imageFile,
-        dateOfBirth,
-      };
+  private async cacheUser(user: any) {
+    const ttl = 15 * 60 * 1000; // 15 minutes
+    // Cache manager automatically stringifies
+    await this.cacheManager.set(`user:email:${user.email}`, user, ttl);
+    await this.cacheManager.set(`user:id:${user.id}`, user, ttl);
+  }
 
-      for (const [key, value] of Object.entries(requiredFields)) {
-        if (!value) {
-          this.logger.error(`Missing ${key}`);
-          throw new BadRequestException(
-            ResponseHelper.error(ResponseCode.MISSING_FIELDS, key),
-          );
-        }
-      }
+  private async clearCachedUser(user: any) {
+    await this.cacheManager.del(`user:email:${user.email}`);
+    await this.cacheManager.del(`user:id:${user.id}`);
+  }
 
-      // Check if email or username already exists
-      const existingUser = await this.dbServer
-        .select()
-        .from(UserTable)
-        .where(or(eq(UserTable.email, email), eq(UserTable.username, username)))
-        .limit(1);
+  // Helper method to invalidate user cache
+  private async invalidateUserCache(email: string, userId: string) {
+    // Delete cache by email
+    await this.redisServer.del(`user:email:${email}`);
 
-      if (existingUser.length > 0) {
-        if (existingUser[0].email === email) {
-          this.logger.warn('Signup attempt with existing email');
-          throw new ConflictException(
-            ResponseHelper.error(ResponseCode.EXISTING_EMAIL),
-          );
-        }
-        if (existingUser[0].username === username) {
-          throw new ConflictException(
-            ResponseHelper.error(ResponseCode.EXISTING_USERNAME),
-          );
-        }
-      }
+    // Delete cache by user ID
+    await this.redisServer.del(`user:id:${userId}`);
 
-      if (!imageFile || !imageFile.originalname) {
-        throw new BadRequestException(
-          ResponseHelper.error(ResponseCode.MISSING_PHOTO),
+    this.logger.log(`Cache invalidated for user: ${email}`);
+  }
+
+  // Invalidate all sessions (force re-login on all devices)
+  private async invalidateAllUserSessions(userId: string) {
+    // Delete main session cache
+    await this.redisServer.del(`session:${userId}`);
+
+    // For pattern-based deletion, you need the raw Redis client
+    // Option 1: If using cache-manager with Redis store
+    const store = this.redisServer.stores as any;
+    if (store && store.getClient) {
+      const redisClient = store.getClient();
+      const sessionKeys = await redisClient.keys(`session:${userId}:*`);
+      if (sessionKeys.length > 0) {
+        await Promise.all(
+          sessionKeys.map((key: string) => this.redisServer.del(key)),
         );
       }
+    }
 
-      // Sanitize filename to prevent path traversal
-      const sanitizedName = imageFile.originalname.replace(
-        /[^a-zA-Z0-9._-]/g,
-        '_',
-      );
+    this.logger.log(`All sessions invalidated for user ID: ${userId}`);
+  }
 
-      // Upload image to S3
-      const imageKey = `users/avatars/${Date.now()}-${sanitizedName}`;
-      await this.s3Server.uploadFile(imageFile, imageKey);
+  private addConstantTimeDelay = async (startTime: number) => {
+    const TARGET_RESPONSE_TIME = 600;
+    const JITTER = 100;
 
-      // Get the S3 URL (public or presigned)
-      const storageProvider = this.configService.storageProvider;
-      const publicDomain =
-        storageProvider === 'r2'
-          ? this.configService.r2PublicDomain
-          : this.configService.awsS3PublicDomain;
+    const elapsed = Date.now() - startTime;
+    const delay = Math.max(
+      0,
+      TARGET_RESPONSE_TIME - elapsed + Math.random() * JITTER,
+    );
 
-      if (!publicDomain) {
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  };
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  async signUp(
+    data: SignUpDto,
+    imageFile: Express.Multer.File,
+    acceptLanguage: string,
+  ) {
+    const {
+      username,
+      password,
+      email,
+      firstName,
+      lastName,
+      dateOfBirth,
+      phoneNumber,
+    } = data;
+
+    // Validate required fields
+    if (
+      !username ||
+      !password ||
+      !email ||
+      !firstName ||
+      !lastName ||
+      !dateOfBirth ||
+      !phoneNumber
+    ) {
+      throw new BadRequestException('All fields are required');
+    }
+
+    if (!imageFile) {
+      throw new BadRequestException('Profile image is required');
+    }
+
+    // Check if email or username already exists
+    const existingUser = await this.dbServer
+      .select()
+      .from(UserTable)
+      .where(or(eq(UserTable.email, email), eq(UserTable.username, username)))
+      .limit(1);
+
+    if (existingUser.length > 0) {
+      if (existingUser[0].email === email) {
+        throw new ConflictException('Email already exists');
+      }
+      if (existingUser[0].username === username) {
+        throw new ConflictException('Username already taken');
+      }
+    }
+
+    // Sanitize filename
+    const sanitizedName = imageFile.originalname.replace(
+      /[^a-zA-Z0-9._-]/g,
+      '_',
+    );
+    const imageKey = `users/avatars/${Date.now()}-${sanitizedName}`;
+
+    await this.s3Server.uploadFile(imageFile, imageKey);
+
+    // Get S3 URL
+    const storageProvider = this.configService.storageProvider;
+    const publicDomain =
+      storageProvider === 'r2'
+        ? this.configService.r2PublicDomain
+        : this.configService.awsS3PublicDomain;
+
+    if (!publicDomain) {
+      throw new InternalServerErrorException('Storage configuration error');
+    }
+
+    const imageUrl = `${publicDomain}/${imageKey}`;
+
+    try {
+      const hashedPassword = await hashPassword(password);
+      const capitalizedFirstName = capitalizeString(firstName);
+      const capitalizedLastName = capitalizeString(lastName);
+
+      const {
+        token: verificationToken,
+        hashedToken: hashedVerificationToken,
+        expiresAt: verificationExpires,
+      } = await this.generateAndHashToken(60 * 24);
+
+      const frontendUrl = this.configService.publicUrl;
+      const locale = acceptLanguage || 'en';
+
+      if (!frontendUrl) {
         throw new InternalServerErrorException(
-          ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
+          'Application configuration error',
         );
       }
-      const imageUrl = `${publicDomain}/${imageKey}`;
+
+      const verificationUrl = `${frontendUrl}/${locale}/verify-email?token=${verificationToken}`;
+
+      let user;
 
       try {
-        // Hash password
-        const hashedPassword = await hashPassword(password);
-
-        // Make sure names are capitalized before placing in DB
-        const capitalizedFirstName = capitalizeString(firstName);
-        const capitalizedLastName = capitalizeString(lastName);
-
-        // Generate email verification token
-        const {
-          token: verificationToken,
-          hashedToken: hashedVerificationToken,
-          expiresAt: verificationExpires,
-        } = await this.generateAndHashToken(60 * 24); // 24 hours expiration
-
-        // Send email with reset link
-        const frontendUrl = this.configService.clientUrl;
-        const locale = acceptLanguage || 'en';
-        if (!frontendUrl) {
-          throw new InternalServerErrorException(
-            ResponseHelper.error(ResponseCode.SERVICE_UNAVAILABLE),
-          );
-        }
-        const verificationUrl = `${frontendUrl}/${locale}/auth/verify-email?token=${verificationToken}`;
-
-        // Create user
-        const [user] = await this.dbServer
+        [user] = await this.dbServer
           .insert(UserTable)
           .values({
             username,
@@ -228,85 +266,140 @@ export class AuthService {
             lastName: capitalizedLastName,
             dateOfBirth: new Date(dateOfBirth),
             password: hashedPassword,
+            phoneNumber,
             imageUrl,
-            userRole: 'USER', // Explicity set the userRole to 'USER' for security reason
+            userRole: 'USER',
             verificationToken: hashedVerificationToken,
             verificationExpires: verificationExpires,
           })
           .returning();
+      } catch (dbError: any) {
+        await this.s3Server.deleteFile(imageKey);
 
-        // TRIGGER INNGEST EVENT for email verification
-        try {
-          await this.inngest.send({
-            name: 'jobxhub/user.created',
-            data: {
-              userId: user.id,
-              email: user.email,
-              name: user.username,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              imageUrl: user.imageUrl,
-              verificationUrl,
-              acceptLanguage: locale,
-            },
-          });
-        } catch (err: any) {
-          this.logger.error(
-            `Failed to emit user.created event: ${err?.message ?? err}`,
-          );
+        // Handle unique constraint violation
+        if (dbError.code === '23505') {
+          // PostgreSQL unique violation
+          if (dbError.constraint?.includes('email')) {
+            throw new ConflictException('Email already exists');
+          }
+          if (dbError.constraint?.includes('username')) {
+            throw new ConflictException('Username already taken');
+          }
         }
-
-        return {
-          message: 'User signed up successfully. Please verify your email.',
-        };
-      } catch (error) {
-        // If database insertion falsi, delete the uploaded file from S3
-        this.logger.warn(
-          `Database insertion failed. Deleting orphaned file: ${imageKey}`,
-        );
-        try {
-          await this.s3Server.deleteFile(imageKey);
-        } catch (s3Error: any) {
-          this.logger.error(
-            `Failed to delete orphaned file ${imageKey}: ${s3Error.message}`,
-          );
-        }
-        throw error;
+        throw dbError;
       }
-    },
-    this.logger,
-    `Failed to sign up user`,
-  );
 
-  // Verify email function
-  verifyEmail = catchAsync(
-    async (token: string) => {
-      // Hash the token from URL to compare with stored hash
-      const hashedToken = crypto
-        .createHash('sha256')
-        .update(token)
-        .digest('hex');
+      try {
+        await this.inngest.send({
+          name: 'jobxhub/user.created',
+          data: {
+            userId: user.id,
+            email: user.email,
+            name: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            imageUrl: user.imageUrl,
+            verificationUrl,
+            acceptLanguage: locale,
+          },
+        });
+      } catch (inngestError: any) {
+        // Rollback: Delete the user we just created
+        await this.dbServer.delete(UserTable).where(eq(UserTable.id, user.id));
 
-      // Find user by verification token and check expiration
-      const [user] = await this.dbServer
+        // Delete the uploaded image
+        await this.s3Server.deleteFile(imageKey);
+
+        Sentry.captureException(inngestError, {
+          extra: {
+            userId: user.id,
+            email: user.email,
+            context: 'signup_inngest_failed',
+          },
+        });
+
+        this.logger.error(
+          `Failed to emit user.created event: ${inngestError?.message ?? inngestError}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to complete signup. Please try again',
+        );
+      }
+
+      return {
+        message: 'User signed up successfully. Please verify your email.',
+      };
+    } catch (error) {
+      // Cleanup orphaned file
+      this.logger.warn(
+        `Database insertion failed. Deleting orphaned file: ${imageKey}`,
+      );
+      await this.s3Server
+        .deleteFile(imageKey)
+        .catch((e) =>
+          this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),
+        );
+      throw error;
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  async verifyEmail(token: string) {
+    // Validate token format before processing
+    if (!token) {
+      throw new BadRequestException('Invalid token');
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const [user] = await this.dbServer
+      .select()
+      .from(UserTable)
+      .where(
+        and(
+          eq(UserTable.verificationToken, hashedToken),
+          gt(UserTable.verificationExpires, new Date()),
+        ),
+      )
+      .limit(1);
+
+    if (!user) {
+      // Log failed verification attempts for security monitoring
+      this.logger.warn(
+        `Failed email verification attempt with token: ${token.substring(0, 8)}...`,
+      );
+
+      // Check if it's an expired token (user exists but token expired)
+      const [expiredUser] = await this.dbServer
         .select()
         .from(UserTable)
-        .where(
-          and(
-            eq(UserTable.verificationToken, hashedToken),
-            gt(UserTable.verificationExpires, new Date()),
-          ),
-        )
+        .where(eq(UserTable.verificationToken, hashedToken))
         .limit(1);
 
-      if (!user) {
-        this.logger.error('Invalid or expired email verification token used');
+      if (expiredUser) {
+        // Token exists but expired - option to resend
         throw new UnauthorizedException(
-          ResponseHelper.error(ResponseCode.INVALID_TOKEN),
+          'Verification token has expired. Please request a new verification email',
         );
       }
 
-      // Update user's verified status and clear verification token fields
+      throw new UnauthorizedException('Invalid or expired verification token');
+    }
+
+    // Check if already verified (prevent replay attacks)
+    if (user.isVerified) {
+      this.logger.warn(
+        `Attempt to verify already verified email: ${user.email}`,
+      );
+      return {
+        message: 'Email already verified',
+      };
+    }
+
+    try {
       await this.dbServer
         .update(UserTable)
         .set({
@@ -317,27 +410,81 @@ export class AuthService {
         .where(eq(UserTable.id, user.id));
 
       this.logger.log(`Email successfully verified for user ID: ${user.id}`);
-      return ResponseHelper.success(ResponseCode.EMAIL_VERIFIED);
-    },
-    this.logger,
-    'Failed to verify email',
-  );
 
-  // SignIn function
-  signIn = catchAsync(
-    async (data: SignInDto) => {
-      const { email, password } = data;
-
-      if (!email || !password) {
+      // Send welcome email or trigger onboarding
+      try {
+        await this.inngest.send({
+          name: 'jobxhub/user.verified',
+          data: {
+            userId: user.id,
+            email: user.email,
+          },
+        });
+      } catch (inngestError) {
+        // Don't fail verification if event fails, just log it
+        Sentry.captureException(inngestError, {
+          extra: {
+            userId: user.id,
+            email: user.email,
+            context: 'email_verification_event_failed',
+          },
+        });
         this.logger.error(
-          `User with email ${sanitizedEmail(email)} missing required fields`,
-        );
-        throw new ConflictException(
-          ResponseHelper.error(ResponseCode.MISSING_FIELDS),
+          `Failed to emit user.verified event: ${inngestError?.message}`,
         );
       }
 
-      // Try to get user from Redis cache
+      return {
+        message: 'Email verified successfully',
+      };
+    } catch (error) {
+      Sentry.captureException(error, {
+        extra: {
+          userId: user.id,
+          email: user.email,
+          context: 'email_verification_update_failed',
+        },
+      });
+      this.logger.error(
+        `Failed to update verification status: ${error?.message}`,
+      );
+      throw new InternalServerErrorException(
+        'Failed to verify email. Please try again',
+      );
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // Sign In
+  async signIn(data: SignInDto, ipAddress: string) {
+    const { email, password } = data;
+    const startTime = Date.now();
+
+    if (!email || !password) {
+      throw new BadRequestException('Email and password are required');
+    }
+
+    try {
+      if (!this.configService.isProduction) {
+        // 1. Check IP-based rate limiting (global protection)
+        await this.checkIpRateLimit(ipAddress);
+
+        // 2. Check email-based rate limiting (account protection)
+        await this.checkEmailRateLimit(email);
+      }
+
+      // 3. Check for account lockout
+      const isLocked = await this.isAccountLocked(email);
+      if (isLocked) {
+        await this.addConstantTimeDelay(startTime);
+        throw new UnauthorizedException(
+          'Account temporarily locked due to multiple failed login attempts. Please try again later or reset your password.',
+        );
+      }
+
       const cachedUser = await this.getCachedUser(email);
 
       let user;
@@ -346,7 +493,6 @@ export class AuthService {
       if (cachedUser) {
         user = cachedUser;
 
-        // Verify user status from DB to prevent cache inconsistencies
         const [dbStatus] = await this.dbServer
           .select({
             isBanned: UserTable.isBanned,
@@ -360,52 +506,34 @@ export class AuthService {
           .limit(1);
 
         if (!dbStatus) {
-          // User deleted but still in cache
-          this.logger.error(
-            `User with ${sanitizedEmail(email)} found in cache but not in database`,
-          );
-          throw new UnauthorizedException(
-            ResponseHelper.error(ResponseCode.INVALID_CREDENTIALS),
-          );
+          await this.handleFailedLogin(email, ipAddress, 'user_not_found');
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Invalid credentials');
         }
 
-        // Check if user is banned
         if (dbStatus.isBanned) {
-          this.logger.error(`User with ${sanitizedEmail(email)} is banned`);
-          throw new UnauthorizedException(
-            ResponseHelper.error(ResponseCode.USER_BANNED),
-          );
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Account has been banned');
         }
 
-        // Check if user is disabled
         if (dbStatus.isDisabled) {
-          this.logger.error(`User with ${sanitizedEmail(email)} is disabled`);
-          throw new UnauthorizedException(
-            ResponseHelper.error(ResponseCode.USER_DISABLED),
-          );
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Account has been disabled');
         }
 
-        // Check if user is verified
         if (!dbStatus.isVerified) {
-          this.logger.error(
-            `User with ${sanitizedEmail(email)} is not verified`,
-          );
+          await this.addConstantTimeDelay(startTime);
           throw new UnauthorizedException(
-            ResponseHelper.error(ResponseCode.USER_NOT_VERIFIED),
+            'Account is not verified. Please check your inbox to verify',
           );
         }
 
-        // Separate password from status
         const { password: dbPassword, ...status } = dbStatus;
         passwordHash = dbPassword;
-
-        // Update user with fresh status ONLY (no password hash)
         user = { ...user, ...status };
 
-        // Update cache with fresh sanitized user
         await this.cacheUser(user);
       } else {
-        // Find user in database
         const [dbUser] = await this.dbServer
           .select()
           .from(UserTable)
@@ -413,59 +541,44 @@ export class AuthService {
           .limit(1);
 
         if (!dbUser) {
-          this.logger.error(
-            `User with ${sanitizedEmail(email)} trying to signin with invalid credentials`,
-          );
-          throw new UnauthorizedException(
-            ResponseHelper.error(ResponseCode.INVALID_CREDENTIALS),
-          );
+          await this.handleFailedLogin(email, ipAddress, 'user_not_found');
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Invalid credentials');
         }
 
-        // Check if user is banned
         if (dbUser.isBanned) {
-          this.logger.error(`User with ${sanitizedEmail(email)} is banned`);
-          throw new UnauthorizedException(
-            ResponseHelper.error(ResponseCode.USER_BANNED),
-          );
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Account has been banned');
         }
 
-        // Check if user is disabled
         if (dbUser.isDisabled) {
-          this.logger.error(`User with ${sanitizedEmail(email)} is disabled`);
-          throw new UnauthorizedException(
-            ResponseHelper.error(ResponseCode.USER_DISABLED),
-          );
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException('Account has been disabled');
         }
 
-        // Check if user is verified
         if (!dbUser.isVerified) {
-          this.logger.error(
-            `User with ${sanitizedEmail(email)} is not verified`,
-          );
+          await this.addConstantTimeDelay(startTime);
           throw new UnauthorizedException(
-            ResponseHelper.error(ResponseCode.USER_NOT_VERIFIED),
+            'Account is not verified. Please check your inbox to verify',
           );
         }
 
         passwordHash = dbUser.password;
         user = dbUser;
 
-        // Cache for 15 minutes (900 seconds)
-        // cacheUser will strip sensitive fields like password before caching
         await this.cacheUser(user);
       }
 
-      // Verify password
       const isPasswordValid = await bcrypt.compare(password, passwordHash);
 
       if (!isPasswordValid) {
-        this.logger.error(
-          `User with ${sanitizedEmail(email)} trying to signin with invalid password at ${this.getTimestamp()}`,
-        );
-        throw new UnauthorizedException(
-          ResponseHelper.error(ResponseCode.INVALID_CREDENTIALS),
-        );
+        await this.handleFailedLogin(email, ipAddress, 'invalid_password');
+        await this.addConstantTimeDelay(startTime);
+        throw new UnauthorizedException('Invalid credentials');
       }
+
+      // Successful login - clear failed attempts
+      await this.clearFailedAttempts(email, ipAddress);
 
       const payload = {
         email: user.email,
@@ -475,20 +588,605 @@ export class AuthService {
 
       const token = this.generateToken(payload);
 
-      const resUser = {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        imageUrl: user.imageUrl,
-        userRole: user.userRole,
+      // Log successful login
+      this.logger.log(`Successful login for user: ${email}`);
+
+      await this.addConstantTimeDelay(startTime);
+
+      return {
         token,
       };
+    } catch (error) {
+      // Capture security-related errors in Sentry
+      if (error instanceof UnauthorizedException) {
+        Sentry.captureMessage('Failed login attempt', {
+          level: 'warning',
+          tags: {
+            operation: 'sign_in',
+            error_type: error.message,
+          },
+          extra: {
+            email,
+            ipAddress,
+          },
+        });
+      } else {
+        Sentry.captureException(error, {
+          tags: {
+            operation: 'sign_in',
+          },
+          extra: {
+            email,
+            ipAddress,
+          },
+        });
+      }
 
-      return ResponseHelper.success(ResponseCode.SIGNIN_SUCCESS, {
-        users: [resUser],
+      throw error;
+    }
+  }
+
+  /**
+   * Check IP-based rate limiting
+   * Prevents distributed brute force attacks
+   */
+  private async checkIpRateLimit(ipAddress: string): Promise<void> {
+    const ipRateLimitKey = `login_ip:${ipAddress}`;
+    const ipAttempts =
+      (await this.cacheManager.get<number>(ipRateLimitKey)) || 0;
+
+    // Allow 10 attempts per IP per hour
+    if (ipAttempts >= 10) {
+      this.logger.warn(`IP rate limit exceeded: ${ipAddress}`);
+
+      Sentry.captureMessage('IP rate limit exceeded on login', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          rate_limit_type: 'ip',
+        },
+        extra: {
+          ipAddress,
+          attempts: ipAttempts,
+        },
       });
-    },
-    this.logger,
-    'Failed to sign in user',
-  );
+
+      throw new HttpException(
+        'Too many login attempts from this IP address. Please try again later.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // Increment counter with 1-hour TTL
+    await this.cacheManager.set(ipRateLimitKey, ipAttempts + 1, 3600 * 1000);
+  }
+
+  /**
+   * Check email-based rate limiting
+   * Prevents targeted attacks on specific accounts
+   */
+  private async checkEmailRateLimit(email: string): Promise<void> {
+    const emailRateLimitKey = `login_email:${email}`;
+    const emailAttempts =
+      (await this.cacheManager.get<number>(emailRateLimitKey)) || 0;
+
+    // Allow 5 attempts per email per 15 minutes
+    if (emailAttempts >= 5) {
+      this.logger.warn(`Email rate limit exceeded: ${email}`);
+
+      Sentry.captureMessage('Email rate limit exceeded on login', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          rate_limit_type: 'email',
+        },
+        extra: {
+          email,
+          attempts: emailAttempts,
+        },
+      });
+
+      throw new HttpException(
+        'Too many login attempts for this account. Please try again later or reset your password.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // Increment counter with 15-minute TTL
+    await this.cacheManager.set(
+      emailRateLimitKey,
+      emailAttempts + 1,
+      900 * 1000,
+    );
+  }
+
+  /**
+   * Check if account is locked due to failed attempts
+   * Implements progressive lockout
+   */
+  private async isAccountLocked(email: string): Promise<boolean> {
+    const lockKey = `account_lock:${email}`;
+    const lockData = await this.cacheManager.get<{
+      lockedUntil: number;
+      attempts: number;
+    }>(lockKey);
+
+    if (!lockData) {
+      return false;
+    }
+
+    // Check if lock has expired
+    if (Date.now() > lockData.lockedUntil) {
+      await this.cacheManager.del(lockKey);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Handle failed login attempts with progressive lockout
+   */
+  private async handleFailedLogin(
+    email: string,
+    ipAddress: string,
+    reason: string,
+  ): Promise<void> {
+    const failedAttemptsKey = `failed_login:${email}`;
+    const lockKey = `account_lock:${email}`;
+
+    // Get current failed attempts
+    const currentAttempts =
+      (await this.cacheManager.get<number>(failedAttemptsKey)) || 0;
+    const newAttempts = currentAttempts + 1;
+
+    // Store failed attempts with 30-minute TTL
+    await this.cacheManager.set(failedAttemptsKey, newAttempts, 1800 * 1000);
+
+    // Log failed attempt
+    this.logger.warn(
+      `Failed login attempt ${newAttempts} for ${email} from ${ipAddress}. Reason: ${reason}`,
+    );
+
+    // Progressive lockout strategy
+    if (newAttempts >= 10) {
+      // 10+ attempts: Lock for 1 hour
+      const lockDuration = 3600 * 1000;
+      await this.lockAccount(email, lockKey, newAttempts, lockDuration);
+
+      Sentry.captureMessage('Account locked - excessive failed attempts', {
+        level: 'error',
+        tags: {
+          operation: 'sign_in',
+          security_event: 'account_locked',
+        },
+        extra: {
+          email,
+          ipAddress,
+          attempts: newAttempts,
+          lockDuration: '1 hour',
+        },
+      });
+    } else if (newAttempts >= 7) {
+      // 7-9 attempts: Lock for 15 minutes
+      const lockDuration = 900 * 1000;
+      await this.lockAccount(email, lockKey, newAttempts, lockDuration);
+    } else if (newAttempts >= 5) {
+      // 5-6 attempts: Lock for 5 minutes
+      const lockDuration = 300 * 1000;
+      await this.lockAccount(email, lockKey, newAttempts, lockDuration);
+
+      Sentry.captureMessage('Account temporarily locked', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          security_event: 'temp_lock',
+        },
+        extra: {
+          email,
+          ipAddress,
+          attempts: newAttempts,
+        },
+      });
+    }
+  }
+
+  /**
+   * Lock account for specified duration
+   */
+  private async lockAccount(
+    email: string,
+    lockKey: string,
+    attempts: number,
+    duration: number,
+  ): Promise<void> {
+    await this.cacheManager.set(
+      lockKey,
+      {
+        lockedUntil: Date.now() + duration,
+        attempts,
+      },
+      duration,
+    );
+
+    this.logger.warn(
+      `Account locked: ${email} for ${duration / 1000} seconds after ${attempts} failed attempts`,
+    );
+  }
+
+  /**
+   * Clear failed login attempts on successful login
+   */
+  private async clearFailedAttempts(
+    email: string,
+    ipAddress: string,
+  ): Promise<void> {
+    const failedAttemptsKey = `failed_login:${email}`;
+    const lockKey = `account_lock:${email}`;
+
+    await Promise.all([
+      this.cacheManager.del(failedAttemptsKey),
+      this.cacheManager.del(lockKey),
+    ]);
+
+    this.logger.log(`Cleared failed attempts for ${email}`);
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  validateUser = async (payload: any) => {
+    if (!payload) {
+      throw new BadRequestException('Invalid payload');
+    }
+
+    // Try to get user from cache first
+    const cachedUser = await this.getCachedUserById(payload.sub);
+
+    if (cachedUser) {
+      // Verify token version from cache
+      if (payload.tokenVersion !== cachedUser.tokenVersion) {
+        // Token version mismatch - clear cache and reject
+        await this.clearCachedUser(cachedUser);
+        this.logger.error(
+          `Token version mismatch for user ID ${cachedUser.id}. Token invalidated.`,
+        );
+        throw new UnauthorizedException(
+          'Token has been invalidated. Please sign in again.',
+        );
+      }
+
+      return cachedUser;
+    }
+
+    // Cache miss - fetch from database
+    const [user] = await this.dbServer
+      .select()
+      .from(UserTable)
+      .where(eq(UserTable.id, payload.sub))
+      .limit(1);
+
+    if (!user) {
+      this.logger.error(
+        `User with ID ${payload.sub} not found during validation`,
+      );
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Check if tokenVersion matches
+    if (payload.tokenVersion !== user.tokenVersion) {
+      this.logger.error(
+        `Token version mismatch for user ID ${user.id}. Token invalidated.`,
+      );
+      throw new UnauthorizedException(
+        'Token has been invalidated. Please sign in again.',
+      );
+    }
+
+    // Cache the user for future requests
+    await this.cacheUser(user);
+
+    return user;
+  };
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  forgotPassword = async (
+    email: string,
+    acceptLanguage: string,
+    ipAddress: string,
+  ) => {
+    const startTime = Date.now();
+    let userExists = false;
+    let shouldSendEmail = false;
+
+    try {
+      // 1. Rate limit by IP (global)
+      const ipRateLimitKey = `pwd_reset_ip:${ipAddress}`;
+      const currentIpAttempts =
+        (await this.cacheManager.get<number>(ipRateLimitKey)) || 0;
+      const ipAttempts = currentIpAttempts + 1;
+
+      await this.cacheManager.set(ipRateLimitKey, ipAttempts, 3600 * 1000);
+
+      if (ipAttempts > 3) {
+        this.logger.warn(
+          `Too many password reset requests from IP: ${ipAddress}`,
+        );
+
+        // Add artificial delay before throwing to prevent timing analysis
+        await this.addConstantTimeDelay(startTime);
+
+        throw new HttpException(
+          'Too many requests',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
+      // 2. Rate limit by email
+      const emailRateLimitKey = `pwd_reset_email:${email}`;
+      const currentEmailAttempts =
+        (await this.cacheManager.get<number>(emailRateLimitKey)) || 0;
+      const emailAttempts = currentEmailAttempts + 1;
+
+      await this.cacheManager.set(
+        emailRateLimitKey,
+        emailAttempts,
+        3600 * 1000,
+      );
+
+      const emailRateLimited = emailAttempts > 3;
+
+      // Find user by email (always execute)
+      const [user] = await this.dbServer
+        .select()
+        .from(UserTable)
+        .where(eq(UserTable.email, email))
+        .limit(1);
+
+      userExists = !!user;
+
+      // Determine if we should actually send email
+      shouldSendEmail =
+        userExists &&
+        !emailRateLimited &&
+        (!user.resetPasswordExpires ||
+          user.resetPasswordExpires <= new Date(Date.now() - 300000));
+
+      // Always generate token (even if not used) to maintain constant time
+      const {
+        token: resetToken,
+        hashedToken,
+        expiresAt,
+      } = await this.generateAndHashToken(15);
+
+      // Update database if user exists and should send email
+      if (shouldSendEmail) {
+        await this.dbServer
+          .update(UserTable)
+          .set({
+            resetPasswordToken: hashedToken,
+            resetPasswordExpires: expiresAt,
+          })
+          .where(eq(UserTable.id, user.id));
+
+        const publicUrl = this.configService.publicUrl;
+        if (!publicUrl) {
+          this.logger.error('CLIENT_URLS is not configured');
+          throw new HttpException(
+            'Server configuration error',
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
+
+        const resetUrl = `${publicUrl}/${acceptLanguage}/reset-password?token=${resetToken}`;
+
+        // Send email asynchronously (to maintain timing)
+        this.inngest
+          .send({
+            name: 'jobxhub/user.reset_password',
+            data: {
+              email,
+              resetUrl,
+              acceptLanguage,
+            },
+          })
+          .catch((error) => {
+            // Log error to Sentry
+            Sentry.captureException(error, {
+              tags: {
+                operation: 'password_reset',
+                email_sent: 'false',
+              },
+              extra: {
+                email,
+                acceptLanguage,
+              },
+            });
+            this.logger.error('Failed to send password reset email', error);
+          });
+      }
+
+      // Log different scenarios to Sentry for monitoring
+      if (!userExists) {
+        this.logger.warn(
+          `Password reset requested for non-existent email: ${email} at ${this.getTimestamp()}`,
+        );
+        Sentry.captureMessage('Password reset for non-existent email', {
+          level: 'warning',
+          tags: {
+            operation: 'password_reset',
+            user_exists: 'false',
+          },
+          extra: {
+            email,
+            ipAddress,
+          },
+        });
+      } else if (emailRateLimited) {
+        this.logger.warn(`Rate limit exceeded for email: ${email}`);
+        Sentry.captureMessage('Password reset rate limit exceeded', {
+          level: 'warning',
+          tags: {
+            operation: 'password_reset',
+            rate_limited: 'true',
+          },
+          extra: {
+            email,
+            ipAddress,
+            attempts: emailAttempts,
+          },
+        });
+      }
+
+      // Add constant-time delay to normalize response time
+      await this.addConstantTimeDelay(startTime);
+
+      // Always return same response
+      return {
+        message: 'Password reset email sent. Please check your inbox',
+      };
+    } catch (error) {
+      // Capture unexpected errors in Sentry
+      if (!(error instanceof HttpException)) {
+        Sentry.captureException(error, {
+          tags: {
+            operation: 'password_reset',
+          },
+          extra: {
+            email,
+            ipAddress,
+            acceptLanguage,
+          },
+        });
+      }
+
+      throw error;
+    }
+  };
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  resetPassword = async (
+    token: string,
+    newPassword: string,
+    confirmNewPassword: string,
+  ) => {
+    if (newPassword !== confirmNewPassword) {
+      this.logger.error(`User provided non-matching passwords`);
+      throw new BadRequestException('Passwords must match');
+    }
+
+    // Hash the token from URL to compare with stored hash
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user by reset token and check expiration
+    const [user] = await this.dbServer
+      .select()
+      .from(UserTable)
+      .where(
+        and(
+          eq(UserTable.resetPasswordToken, hashedToken),
+          gt(UserTable.resetPasswordExpires, new Date()),
+        ),
+      )
+      .limit(1);
+
+    if (!user) {
+      this.logger.error('Invalid or expired password reset token used');
+      throw new UnauthorizedException('Invalid or expired verification token');
+    }
+
+    // Hash new password
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update user's password and clear reset token fields
+    await this.dbServer
+      .update(UserTable)
+      .set({
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+        tokenVersion: user.tokenVersion + 1,
+      })
+      .where(eq(UserTable.id, user.id));
+
+    // Invalidate all cached user data
+    await this.invalidateUserCache(user.email, user.id);
+
+    // Invalidate all active sessions for this user
+    await this.invalidateAllUserSessions(user.id);
+
+    this.logger.log(`Password successfully reset for user ID: ${user.id}`);
+    return {
+      message: 'Password reset successfully',
+    };
+  };
+
+  async signOut(userId: string) {
+    try {
+      // 1. Get user data to clear cache properly
+      const [user] = await this.dbServer
+        .select({
+          id: UserTable.id,
+          email: UserTable.email,
+          tokenVersion: UserTable.tokenVersion,
+        })
+        .from(UserTable)
+        .where(eq(UserTable.id, userId))
+        .limit(1);
+
+      if (!user) {
+        this.logger.warn(`Sign out attempted for non-existent user: ${userId}`);
+        return {
+          message: 'Signed out successfully',
+        };
+      }
+
+      // 2. Increment token version to invalidate all existing tokens
+      await this.dbServer
+        .update(UserTable)
+        .set({
+          tokenVersion: user.tokenVersion + 1,
+        })
+        .where(eq(UserTable.id, userId));
+
+      // 3. Clear user cache
+      await this.invalidateUserCache(user.email, user.id);
+
+      // 4. Invalidate all sessions
+      await this.invalidateAllUserSessions(user.id);
+
+      // 5. Log the sign-out event
+      this.logger.log(
+        `User ${user.email} (ID: ${userId}) signed out successfully`,
+      );
+
+      return {
+        message: 'Signed out successfully',
+      };
+    } catch (error) {
+      // Log error but don't fail the sign-out
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'sign_out',
+        },
+        extra: {
+          userId,
+        },
+      });
+
+      this.logger.error(`Sign out error for user ${userId}: ${error?.message}`);
+
+      // Still return success - user experience is more important
+      return {
+        message: 'Signed out successfully',
+      };
+    }
+  }
 }

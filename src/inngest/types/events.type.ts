@@ -50,7 +50,7 @@ export type Events = {
   'jobxhub/user.updated': {
     data: UserUpdatedData;
   };
-  'jobxhub/user.reset_password_requested': {
+  'jobxhub/user.reset_password': {
     data: ResetPasswordRequestData;
   };
   'jobxhub/job.posted': {
