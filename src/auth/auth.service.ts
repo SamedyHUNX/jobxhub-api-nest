@@ -468,7 +468,7 @@ export class AuthService {
     }
 
     try {
-      if (!this.configService.isProduction) {
+      if (this.configService.isProduction) {
         // 1. Check IP-based rate limiting (global protection)
         await this.checkIpRateLimit(ipAddress);
 
