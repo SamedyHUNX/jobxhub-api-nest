@@ -47,7 +47,7 @@ export class S3Service {
 
     // R2 endpoint if using Cloudflare R2
     if (isR2 && this.configService.r2AccountId) {
-      clientConfig.endpoint = `https://${this.configService.r2AccountId}.r2.cloudflarestorage.com`;
+      clientConfig.endpoint = `https://${this.configService.r2AccountId}.r2.cloudflarestorage.com/`;
     }
 
     this.s3Client = new S3Client(clientConfig);

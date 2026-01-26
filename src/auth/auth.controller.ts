@@ -45,10 +45,10 @@ export class AuthController {
   )
   signUp(
     @Body() data: SignUpDto,
-    @UploadedFile(new ImageValidationPipe()) file: Express.Multer.File,
+    @UploadedFile(new ImageValidationPipe()) image: Express.Multer.File,
     @Headers('accept-language') acceptLanguage: string,
   ) {
-    return this.authService.signUp(data, file, acceptLanguage);
+    return this.authService.signUp(data, image, acceptLanguage);
   }
 
   // Verify Email (/api/auth/verify-email)
