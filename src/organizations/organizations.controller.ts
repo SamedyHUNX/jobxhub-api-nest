@@ -10,7 +10,6 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
-import { ConfigService } from '@/config/config.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MulterExceptionFilter } from '@/utils/multer-global-handling';

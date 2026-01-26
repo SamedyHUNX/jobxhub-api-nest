@@ -16,7 +16,7 @@ import {
   OrganizationTable,
   OrganizationUserSettingsTable,
 } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 
 @Injectable()
 export class OrganizationsService {
@@ -82,18 +82,25 @@ export class OrganizationsService {
   ) => {
     const { orgName, slug } = data;
 
-    // Check if organization with same orgName already exists
+    // Check if organization with same orgName or slug already exists
     const existingOrg = await this.dbServer
       .select()
       .from(OrganizationTable)
-      .where(eq(OrganizationTable.orgName, orgName))
+      .where(
+        or(
+          eq(OrganizationTable.orgName, orgName),
+          eq(OrganizationTable.slug, slug),
+        ),
+      )
       .limit(1);
 
     if (existingOrg.length > 0) {
-      this.logger.error(
-        `Organization with orgName "${orgName}" already exists`,
-      );
-      throw new ConflictException('Organization already exists');
+      if (existingOrg[0].orgName === orgName) {
+        throw new ConflictException('Organization name already exists');
+      }
+      if (existingOrg[0].slug === slug) {
+        throw new ConflictException('Organization slug already taken');
+      }
     }
 
     let imageUrl: string | undefined;
@@ -101,28 +108,82 @@ export class OrganizationsService {
 
     // Upload image to S3 if provided
     if (file && file.originalname) {
-      imageKey = `organizations/logos/${Date.now()}-${file.originalname}`;
+      const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      imageKey = `organizations/logos/${Date.now()}-${sanitizedName}`;
+
       await this.s3Server.uploadFile(file, imageKey);
-      imageUrl = `${process.env.R2_PUBLIC_DOMAIN}/${imageKey}`;
+
+      // Get S3 URL from config
+      const storageProvider = this.configService.storageProvider;
+      const publicDomain =
+        storageProvider === 'r2'
+          ? this.configService.r2PublicDomain
+          : this.configService.awsS3PublicDomain;
+
+      if (!publicDomain) {
+        await this.s3Server.deleteFile(imageKey);
+        throw new InternalServerErrorException('Storage configuration error');
+      }
+
+      imageUrl = `${publicDomain}/${imageKey}`;
     }
 
     try {
-      // Create organization
-      const [organization] = await this.dbServer
-        .insert(OrganizationTable)
-        .values({
-          orgName,
-          imageUrl,
-          slug,
-        })
-        .returning();
+      let organization;
 
-      // Assign the creator as a member of the organization
-      await this.dbServer.insert(OrganizationUserSettingsTable).values({
-        userId,
-        organizationId: organization.id,
-        newApplicationEmailNotifications: false,
-      });
+      try {
+        // Create organization
+        [organization] = await this.dbServer
+          .insert(OrganizationTable)
+          .values({
+            orgName,
+            imageUrl,
+            slug,
+          })
+          .returning();
+      } catch (dbError: any) {
+        // Cleanup uploaded file if database insert fails
+        if (imageKey) {
+          await this.s3Server.deleteFile(imageKey);
+        }
+
+        // Handle unique constraint violation
+        if (dbError.code === '23505') {
+          if (dbError.constraint?.includes('orgName')) {
+            throw new ConflictException('Organization name already exists');
+          }
+          if (dbError.constraint?.includes('slug')) {
+            throw new ConflictException('Organization slug already taken');
+          }
+        }
+        throw dbError;
+      }
+
+      try {
+        // Assign the creator as a member of the organization
+        await this.dbServer.insert(OrganizationUserSettingsTable).values({
+          userId,
+          organizationId: organization.id,
+          newApplicationEmailNotifications: false,
+        });
+      } catch (settingsError: any) {
+        // Rollback: Delete the organization we just created
+        await this.dbServer
+          .delete(OrganizationTable)
+          .where(eq(OrganizationTable.id, organization.id));
+
+        // Delete the uploaded image if exists
+        if (imageKey) {
+          await this.s3Server.deleteFile(imageKey);
+        }
+
+        this.logger.error(
+          `Failed to create organization user settings: ${settingsError?.message ?? settingsError}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to complete organization creation. Please try again',
+        );
+      }
 
       this.logger.log(
         `Organization created with ID: ${organization.id} and assigned to user: ${userId}`,
@@ -131,23 +192,20 @@ export class OrganizationsService {
       return {
         message: 'Organization created successfully',
         data: {
-          organization,
+          organizations: organization,
         },
       };
     } catch (error) {
-      // If database insertion fails, delete the uploaded file from S3
+      // Final cleanup for any uncaught errors
       if (imageKey) {
         this.logger.warn(
-          `Database insertion failed. Deleting orphaned file: ${imageKey}`,
+          `Operation failed. Deleting orphaned file: ${imageKey}`,
         );
-        try {
-          await this.s3Server.deleteFile(imageKey);
-        } catch (s3Error: any) {
-          // Opt to not alert the user
-          this.logger.error(
-            `Failed to delete orphaned file ${imageKey}: ${s3Error.message}`,
+        await this.s3Server
+          .deleteFile(imageKey)
+          .catch((e) =>
+            this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),
           );
-        }
       }
       throw error;
     }

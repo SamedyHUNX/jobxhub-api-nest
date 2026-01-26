@@ -20,7 +20,6 @@ export class MulterExceptionFilter implements ExceptionFilter {
     }
 
     throw new BadRequestException({
-      code: 'MULTER_ERROR',
       message: exception.message,
     });
   }
