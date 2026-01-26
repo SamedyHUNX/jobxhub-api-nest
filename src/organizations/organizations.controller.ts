@@ -21,7 +21,7 @@ export class OrganizationsController {
   constructor(private readonly orgsService: OrganizationsService) {}
 
   // Create a new organization: POST /organizations
-  @Post()
+  @Post('/create')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('image', {

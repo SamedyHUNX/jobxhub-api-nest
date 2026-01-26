@@ -1,0 +1,2 @@
+ALTER TABLE "organizations" ADD COLUMN "created_by" uuid NOT NULL;--> statement-breakpoint
+ALTER TABLE "organizations" ADD CONSTRAINT "organizations_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;

@@ -139,6 +139,7 @@ export class OrganizationsService {
             orgName,
             imageUrl,
             slug,
+            createdBy: userId,
           })
           .returning();
       } catch (dbError: any) {
