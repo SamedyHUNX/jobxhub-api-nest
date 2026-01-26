@@ -15,6 +15,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { MulterExceptionFilter } from '@/utils/multer-global-handling';
 import { CreateOrganizationDto } from './dtos/organizations.dto';
 import { CurrentUser } from '@/auth/decorators/current-user.decorator';
+import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @Controller('organizations')
 export class OrganizationsController {
@@ -22,6 +23,8 @@ export class OrganizationsController {
 
   // Create a new organization: POST /organizations
   @Post('/create')
+  @ApiOperation({ summary: 'Create an organization' })
+  @ApiResponse({ status: 200, description: 'Create an organization' })
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('image', {

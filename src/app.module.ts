@@ -10,6 +10,7 @@ import { DrizzleModule } from './drizzle/drizzle.module';
 import { ConfigService } from './config/config.service';
 import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
+import { OrganizationsModule } from './organizations/organizations.module';
 
 @Module({
   imports: [
@@ -19,12 +20,17 @@ import { APP_FILTER } from '@nestjs/core';
     InngestModule,
     RedisModule,
     DrizzleModule,
+    OrganizationsModule,
     SentryModule.forRoot(),
   ],
   controllers: [AppController],
-  providers: [AppService, ConfigService, {
-    provide: APP_FILTER,
-    useClass: SentryGlobalFilter
-  }],
+  providers: [
+    AppService,
+    ConfigService,
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
+    },
+  ],
 })
 export class AppModule {}

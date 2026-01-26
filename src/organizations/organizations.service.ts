@@ -16,6 +16,7 @@ import {
   OrganizationTable,
   OrganizationUserSettingsTable,
 } from '@/drizzle/schema';
+import type { Cache } from 'cache-manager';
 import { eq, or } from 'drizzle-orm';
 
 @Injectable()

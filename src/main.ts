@@ -6,11 +6,13 @@ import cookieParser from 'cookie-parser';
 import './instrument';
 
 async function bootstrap() {
+  // Create the App
   const app = await NestFactory.create(AppModule);
+  // To access the ConfigService (Environment Variables)
   const configService = app.get(ConfigService);
-
   const clientUrls = configService.get<string>('CLIENT_URLS')?.split(',') || [];
 
+  // API Documentation
   const config = new DocumentBuilder()
     .setTitle('JobXHub API')
     .setDescription('API description')

@@ -7,8 +7,8 @@ import { EmailService } from '@/email/email.service';
 
 @Module({
   imports: [AppConfigModule],
-  providers: [InngestClientService, UserFunctionsService, EmailService],
   exports: [InngestClientService],
   controllers: [InngestController],
+  providers: [InngestClientService, UserFunctionsService, EmailService],
 })
 export class InngestModule {}
