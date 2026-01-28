@@ -22,6 +22,7 @@ if (!Number.isFinite(fileSizeLimit) || fileSizeLimit <= 0) {
 export class S3Controller {
   constructor(private readonly s3Service: S3Service) {}
 
+  // Handles file upload from client
   @Post()
   @UseInterceptors(
     FileInterceptor('file', {
@@ -43,18 +44,21 @@ export class S3Controller {
     };
   }
 
+  // Retrieves a file directly from S3 by its key
   @Get(':key')
   async getFile(@Param('key') key: string, @Res() res: Response) {
     const file = await this.s3Service.getFile(key);
     res.send(file);
   }
 
+  // Generates a presigned URL for a given file key.
   @Get('presigned/:key')
   async getPresignedUrl(@Param('key') key: string) {
     const url = await this.s3Service.getPresignedUrl(key);
     return { url };
   }
 
+  // Deletes a file from S3 by its key.
   @Delete(':key')
   async deleteFile(@Param('key') key: string) {
     await this.s3Service.deleteFile(key);

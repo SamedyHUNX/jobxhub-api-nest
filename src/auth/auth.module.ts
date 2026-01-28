@@ -19,11 +19,7 @@ import { AppConfigModule } from '@/config/config.module';
       useFactory: async (configService: ConfigService) => {
         const secret = configService.jwtSecret;
         if (!secret) throw new Error('JWT_SECRET is required');
-        const expiresInRaw = configService.jwtExpiresIn;
-        const expiresInParsed = Number(expiresInRaw);
-        const expiresIn = Number.isFinite(expiresInParsed)
-          ? expiresInParsed
-          : 3600;
+        const expiresIn = configService.jwtExpiresIn;
         return {
           secret,
           signOptions: { expiresIn },

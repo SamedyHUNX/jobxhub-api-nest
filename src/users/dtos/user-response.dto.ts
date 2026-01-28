@@ -24,6 +24,9 @@ export class UserResponseDto {
   userRole: string;
 
   @Expose()
+  phoneNumber: string;
+
+  @Expose()
   dateOfBirth: Date;
 
   @Expose()

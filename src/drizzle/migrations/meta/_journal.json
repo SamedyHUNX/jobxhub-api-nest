@@ -36,6 +36,20 @@
       "when": 1769095430724,
       "tag": "0004_silent_silk_fever",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1769410962071,
+      "tag": "0005_giant_carlie_cooper",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1769584077900,
+      "tag": "0006_new_otto_octavius",
+      "breakpoints": true
     }
   ]
 }
