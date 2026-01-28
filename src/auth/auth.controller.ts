@@ -52,6 +52,8 @@ export class AuthController {
   }
 
   // Verify Email (/api/auth/verify-email)
+  @ApiOperation({ summary: 'Verify email' })
+  @ApiResponse({ status: 200, description: 'Verify email' })
   @Post('verify-email')
   verifyEmail(@Body('token') token: string) {
     return this.authService.verifyEmail(token);

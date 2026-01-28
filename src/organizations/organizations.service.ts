@@ -4,20 +4,23 @@ import { InngestClientService } from '@/inngest/inngest.service';
 import { S3Service } from '@/s3/s3.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
 import { CreateOrganizationDto } from './dtos/organizations.dto';
 import {
   OrganizationTable,
   OrganizationUserSettingsTable,
+  UserTable,
 } from '@/drizzle/schema';
 import type { Cache } from 'cache-manager';
-import { eq, or } from 'drizzle-orm';
+import { and, eq, like, or } from 'drizzle-orm';
 
 @Injectable()
 export class OrganizationsService {
@@ -31,7 +34,7 @@ export class OrganizationsService {
     private inngestService: InngestClientService,
   ) {}
 
-  private get redisServer() {
+  private get redisCache() {
     if (!this.cacheManager) {
       const message = `Redis server is down at ${this.getTimestamp()}`;
       this.logger.error(message);
@@ -74,6 +77,45 @@ export class OrganizationsService {
     }
     return this.s3Service;
   }
+
+  // Get all orgs with optional filtering
+  findAll = async (search?: string, isVerified?: boolean) => {
+    const cacheKey = `orgs:all${search ? `:search:${search}` : ''}${isVerified !== undefined ? `:verified:${isVerified}` : ''}`;
+
+    const cached = await this.redisCache.get(cacheKey);
+    if (cached) return cached;
+
+    const baseQuery = this.dbServer.select().from(OrganizationTable);
+
+    let organizations;
+
+    if (search && isVerified !== undefined) {
+      organizations = await baseQuery.where(
+        and(
+          like(OrganizationTable.orgName, `%${search}%`),
+          eq(OrganizationTable.isVerified, isVerified),
+        ),
+      );
+    } else if (search) {
+      organizations = await baseQuery.where(
+        like(OrganizationTable.orgName, `%${search}%`),
+      );
+    } else if (isVerified !== undefined) {
+      organizations = await baseQuery.where(
+        eq(OrganizationTable.isVerified, isVerified),
+      );
+    } else {
+      organizations = await baseQuery;
+    }
+
+    const result = {
+      message: 'Organizations fetched successfully',
+      data: { organizations },
+    };
+
+    await this.redisCache.set(cacheKey, result, 300); // 5 min (300 seconds)
+    return result;
+  };
 
   // Create an organization
   create = async (
@@ -211,5 +253,74 @@ export class OrganizationsService {
       }
       throw error;
     }
+  };
+
+  // Get organizations by user ID
+  findByUser = async (userId: string) => {
+    if (!userId) {
+      this.logger.error('Missing userId');
+      throw new BadRequestException('No userId provided');
+    }
+
+    const [user] = await this.dbServer
+      .select({ id: UserTable.id })
+      .from(UserTable)
+      .where(eq(UserTable.id, userId))
+      .limit(1);
+
+    if (!user) {
+      this.logger.error(`User with id ${userId} not found`);
+      throw new NotFoundException('User not found');
+    }
+
+    const orgs = await this.dbServer
+      .select()
+      .from(OrganizationTable)
+      .innerJoin(
+        OrganizationUserSettingsTable,
+        eq(OrganizationTable.id, OrganizationUserSettingsTable.organizationId),
+      )
+      .where(eq(OrganizationUserSettingsTable.userId, userId));
+
+    if (!orgs) {
+      throw new NotFoundException(
+        'No organizations found. Please consider creating one',
+      );
+    }
+
+    return {
+      message: 'Organizations fetched successfully',
+      data: {
+        organizations: orgs,
+      },
+    };
+  };
+
+  // Get a single organization by ID
+  findOne = async (orgId: string) => {
+    if (!orgId) {
+      this.logger.error('Missing orgId');
+      throw new BadRequestException('No orgId provided');
+    }
+
+    const [org] = await this.dbServer
+      .select()
+      .from(OrganizationTable)
+      .where(eq(OrganizationTable.id, orgId))
+      .limit(1);
+
+    if (!org) {
+      this.logger.error(`Organization with ID ${orgId} not found`);
+      throw new NotFoundException(
+        'No organizations found. Please consider creating one',
+      );
+    }
+
+    return {
+      message: 'Organizations fetched successfully',
+      data: {
+        organizations: org,
+      },
+    };
   };
 }

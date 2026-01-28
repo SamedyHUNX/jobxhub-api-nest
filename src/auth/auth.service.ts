@@ -36,12 +36,12 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  private get redisServer() {
+  private get redisCache() {
     if (!this.cacheManager) {
       const message = `Redis server is down at ${this.getTimestamp()}`;
       this.logger.error(message);
       Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Cache service unavailable');
+      throw new InternalServerErrorException('RedisCache service unavailable');
     }
     return this.cacheManager;
   }
@@ -114,10 +114,10 @@ export class AuthService {
   // Helper method to invalidate user cache
   private async invalidateUserCache(email: string, userId: string) {
     // Delete cache by email
-    await this.redisServer.del(`user:email:${email}`);
+    await this.redisCache.del(`user:email:${email}`);
 
     // Delete cache by user ID
-    await this.redisServer.del(`user:id:${userId}`);
+    await this.redisCache.del(`user:id:${userId}`);
 
     this.logger.log(`Cache invalidated for user: ${email}`);
   }
@@ -125,17 +125,17 @@ export class AuthService {
   // Invalidate all sessions (force re-login on all devices)
   private async invalidateAllUserSessions(userId: string) {
     // Delete main session cache
-    await this.redisServer.del(`session:${userId}`);
+    await this.redisCache.del(`session:${userId}`);
 
     // For pattern-based deletion, you need the raw Redis client
     // Option 1: If using cache-manager with Redis store
-    const store = this.redisServer.stores as any;
+    const store = this.redisCache.stores as any;
     if (store && store.getClient) {
       const redisClient = store.getClient();
       const sessionKeys = await redisClient.keys(`session:${userId}:*`);
       if (sessionKeys.length > 0) {
         await Promise.all(
-          sessionKeys.map((key: string) => this.redisServer.del(key)),
+          sessionKeys.map((key: string) => this.redisCache.del(key)),
         );
       }
     }
@@ -636,7 +636,7 @@ export class AuthService {
       (await this.cacheManager.get<number>(ipRateLimitKey)) || 0;
 
     // Allow 10 attempts per IP per hour
-    if (ipAttempts >= 10) {
+    if (ipAttempts >= 3) {
       this.logger.warn(`IP rate limit exceeded: ${ipAddress}`);
 
       Sentry.captureMessage('IP rate limit exceeded on login', {
