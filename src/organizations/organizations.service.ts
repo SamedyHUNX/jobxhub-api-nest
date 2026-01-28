@@ -32,7 +32,7 @@ export class OrganizationsService {
     private s3Service: S3Service,
     private readonly configService: ConfigService,
     private inngestService: InngestClientService,
-  ) {}
+  ) { }
 
   private get redisCache() {
     if (!this.cacheManager) {
@@ -282,16 +282,19 @@ export class OrganizationsService {
       )
       .where(eq(OrganizationUserSettingsTable.userId, userId));
 
-    if (!orgs) {
+    if (!orgs || orgs.length === 0) {
       throw new NotFoundException(
         'No organizations found. Please consider creating one',
       );
     }
 
+    // Extract only the organization data from the join result
+    const organizations = orgs.map((item) => item.organizations);
+
     return {
       message: 'Organizations fetched successfully',
       data: {
-        organizations: orgs,
+        organizations,
       },
     };
   };
