@@ -11,6 +11,7 @@ import { ConfigService } from './config/config.service';
 import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { UsersModule } from './users/user.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
     RedisModule,
     DrizzleModule,
     OrganizationsModule,
+    UsersModule,
     SentryModule.forRoot(),
   ],
   controllers: [AppController],

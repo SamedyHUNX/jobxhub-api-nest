@@ -14,7 +14,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SignInDto, SignUpDto } from './dtos/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
-import { capitalizeString, hashPassword } from '@/utils/helpers';
+import { capitalizeString, getImageKey, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
@@ -215,7 +215,7 @@ export class AuthService {
       /[^a-zA-Z0-9._-]/g,
       '_',
     );
-    const imageKey = `users/avatars/${Date.now()}-${sanitizedName}`;
+    const imageKey = getImageKey('user', 'avatar', sanitizedName);
 
     await this.s3Server.uploadFile(imageFile, imageKey);
 

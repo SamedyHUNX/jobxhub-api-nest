@@ -28,3 +28,11 @@ export async function hashPassword(password: string): Promise<string> {
 export function sanitizedEmail(email: string): string {
   return email ? `${email.substring(0, 3)}***` : 'unknown';
 }
+
+export function getImageKey(
+  collection: string,
+  folder = 'avatar',
+  name: string,
+) {
+  return `${collection}/${folder}/${Date.now()}-${name}`;
+}
