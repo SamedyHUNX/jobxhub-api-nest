@@ -8,12 +8,14 @@ import { JwtStrategy } from './jwt/jwt.strategy';
 import { InngestModule } from '@/inngest/inngest.module';
 import { ConfigService } from '@/config/config.service';
 import { AppConfigModule } from '@/config/config.module';
+import { CacheModule } from '@/cache/cache.module';
 @Module({
   imports: [
     S3Module,
     PassportModule,
     InngestModule,
     AppConfigModule,
+    CacheModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {

@@ -9,6 +9,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -17,7 +18,7 @@ import { UpdatedMeDataDto } from './dtos/update-me.dto';
 import { UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
 import type { Cache } from 'cache-manager';
-import { getImageKey } from '@/utils/helpers';
+import * as Sentry from '@sentry/nestjs';
 
 @Injectable()
 export class UsersService {
@@ -29,7 +30,21 @@ export class UsersService {
     private s3Service: S3Service,
     private inngestService: InngestClientService,
     private configService: ConfigService,
-  ) { }
+  ) {}
+
+  private getTimestamp(): string {
+    return new Date().toISOString();
+  }
+
+  private get s3Server() {
+    if (!this.s3Service) {
+      const message = `S3 service is down at ${this.getTimestamp()}`;
+      this.logger.error(message);
+      Sentry.captureException(new Error(message));
+      throw new InternalServerErrorException('Storage service unavailable');
+    }
+    return this.s3Service;
+  }
 
   updateMe = async (
     userId: string,
@@ -37,6 +52,9 @@ export class UsersService {
     imageFile?: Express.Multer.File,
   ) => {
     const { firstName, lastName, username, phoneNumber } = data;
+
+    // Variable to track uploaded image for cleanup
+    let uploadedImageKey: string | undefined;
 
     try {
       // Check if username is being updated and if it's already taken
@@ -66,8 +84,6 @@ export class UsersService {
       if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
 
       // Handle image upload if provided
-      let imageUrl: string | undefined;
-      let imageKey: string | undefined;
       let oldImageUrl: string | undefined;
 
       if (imageFile) {
@@ -81,29 +97,14 @@ export class UsersService {
         oldImageUrl = currentUser?.imageUrl;
 
         // Upload new image
-        const sanitizedName = imageFile.originalname.replace(
-          /[^a-zA-Z0-9._-]/g,
-          '_',
+        const { key, url } = await this.s3Server.uploadFileAndGetUrl(
+          imageFile,
+          'users',
+          'avatars',
         );
 
-        imageKey = getImageKey("users", "avatars", sanitizedName)
-
-        await this.s3Service.uploadFile(imageFile, imageKey);
-
-        // Get S3 URL from config
-        const storageProvider = this.configService.storageProvider;
-        const publicDomain =
-          storageProvider === 'r2'
-            ? this.configService.r2PublicDomain
-            : this.configService.awsS3PublicDomain;
-
-        if (!publicDomain) {
-          await this.s3Service.deleteFile(imageKey);
-          throw new BadRequestException('Storage configuration error');
-        }
-
-        imageUrl = `${publicDomain}/${imageKey}`;
-        updateData.imageUrl = imageUrl;
+        uploadedImageKey = key; // Track for cleanup
+        updateData.imageUrl = url;
       }
 
       // Only proceed if there's data to update
@@ -123,18 +124,18 @@ export class UsersService {
 
       if (!updatedUser) {
         // Cleanup uploaded file if update failed
-        if (imageKey) {
-          await this.s3Service.deleteFile(imageKey);
+        if (uploadedImageKey) {
+          await this.s3Server.deleteFile(uploadedImageKey);
         }
         throw new NotFoundException('User not found');
       }
 
       // Delete old image from S3 if a new one was uploaded
-      if (oldImageUrl && imageKey) {
+      if (oldImageUrl && uploadedImageKey) {
         try {
           // Extract the key from the old URL
           const oldKey = oldImageUrl.split('/').slice(3).join('/');
-          await this.s3Service.deleteFile(oldKey);
+          await this.s3Server.deleteFile(oldKey);
         } catch (deleteError) {
           // Log but don't fail the request if old image deletion fails
           this.logger.warn(
@@ -144,7 +145,6 @@ export class UsersService {
       }
 
       // Invalidate cache for this user using the same keys as auth.service
-      // Cache keys: user:id:${userId} and user:email:${email}
       await this.cacheManager.del(`user:id:${userId}`);
       await this.cacheManager.del(`user:email:${updatedUser.email}`);
 
@@ -160,6 +160,19 @@ export class UsersService {
         },
       };
     } catch (error) {
+      // Cleanup uploaded image if something went wrong
+      if (uploadedImageKey) {
+        this.logger.warn(
+          `Operation failed. Deleting orphaned file: ${uploadedImageKey}`,
+        );
+        await this.s3Server
+          .deleteFile(uploadedImageKey)
+          .catch((e) =>
+            this.logger.error(
+              `Failed to delete ${uploadedImageKey}: ${e.message}`,
+            ),
+          );
+      }
       this.logger.error(`Failed to update user ${userId}:`, error);
       throw error;
     }

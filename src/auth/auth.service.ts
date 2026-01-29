@@ -5,7 +5,6 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
-  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -18,33 +17,24 @@ import { capitalizeString, getImageKey, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
 import { InngestClientService } from '@/inngest/inngest.service';
 import { ConfigService } from '@/config/config.service';
 import * as Sentry from '@sentry/nestjs';
+import { UserCacheService } from '@/cache/services/user-cache.service';
+import { RateLimitCacheService } from '@/cache/services/rate-limit-cache.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   constructor(
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private userCacheService: UserCacheService,
     private jwtService: JwtService,
     private dbService: DrizzleService,
     private s3Service: S3Service,
     private inngestService: InngestClientService,
     private configService: ConfigService,
+    private rateLimitCacheService: RateLimitCacheService,
   ) {}
-
-  private get redisCache() {
-    if (!this.cacheManager) {
-      const message = `Redis server is down at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('RedisCache service unavailable');
-    }
-    return this.cacheManager;
-  }
 
   private get inngest() {
     if (!this.inngestService || !this.inngestService.inngest) {
@@ -92,55 +82,29 @@ export class AuthService {
   }
 
   private async getCachedUser(email: string) {
-    return await this.cacheManager.get<any>(`user:email:${email}`);
+    return await this.userCacheService.getUserByEmail(email);
   }
 
   private async getCachedUserById(userId: string) {
-    return await this.cacheManager.get<any>(`user:id:${userId}`);
+    return await this.userCacheService.getUserById(userId);
   }
 
   private async cacheUser(user: any) {
-    const ttl = 15 * 60 * 1000; // 15 minutes
-    // Cache manager automatically stringifies
-    await this.cacheManager.set(`user:email:${user.email}`, user, ttl);
-    await this.cacheManager.set(`user:id:${user.id}`, user, ttl);
+    await this.userCacheService.setUser(user);
   }
 
   private async clearCachedUser(user: any) {
-    await this.cacheManager.del(`user:email:${user.email}`);
-    await this.cacheManager.del(`user:id:${user.id}`);
+    await this.userCacheService.clearUser(user);
   }
 
   // Helper method to invalidate user cache
   private async invalidateUserCache(email: string, userId: string) {
-    // Delete cache by email
-    await this.redisCache.del(`user:email:${email}`);
-
-    // Delete cache by user ID
-    await this.redisCache.del(`user:id:${userId}`);
-
-    this.logger.log(`Cache invalidated for user: ${email}`);
+    await this.userCacheService.invalidateUser(email, userId);
   }
 
   // Invalidate all sessions (force re-login on all devices)
   private async invalidateAllUserSessions(userId: string) {
-    // Delete main session cache
-    await this.redisCache.del(`session:${userId}`);
-
-    // For pattern-based deletion, you need the raw Redis client
-    // Option 1: If using cache-manager with Redis store
-    const store = this.redisCache.stores as any;
-    if (store && store.getClient) {
-      const redisClient = store.getClient();
-      const sessionKeys = await redisClient.keys(`session:${userId}:*`);
-      if (sessionKeys.length > 0) {
-        await Promise.all(
-          sessionKeys.map((key: string) => this.redisCache.del(key)),
-        );
-      }
-    }
-
-    this.logger.log(`All sessions invalidated for user ID: ${userId}`);
+    await this.userCacheService.invalidateAllSessions(userId);
   }
 
   private addConstantTimeDelay = async (startTime: number) => {
@@ -210,27 +174,8 @@ export class AuthService {
       }
     }
 
-    // Sanitize filename
-    const sanitizedName = imageFile.originalname.replace(
-      /[^a-zA-Z0-9._-]/g,
-      '_',
-    );
-    const imageKey = getImageKey('user', 'avatar', sanitizedName);
-
-    await this.s3Server.uploadFile(imageFile, imageKey);
-
-    // Get S3 URL
-    const storageProvider = this.configService.storageProvider;
-    const publicDomain =
-      storageProvider === 'r2'
-        ? this.configService.r2PublicDomain
-        : this.configService.awsS3PublicDomain;
-
-    if (!publicDomain) {
-      throw new InternalServerErrorException('Storage configuration error');
-    }
-
-    const imageUrl = `${publicDomain}/${imageKey}`;
+    const { key: imageKey, url: imageUrl } =
+      await this.s3Server.uploadFileAndGetUrl(imageFile, 'users', 'avatars');
 
     try {
       const hashedPassword = await hashPassword(password);
@@ -631,12 +576,11 @@ export class AuthService {
    * Prevents distributed brute force attacks
    */
   private async checkIpRateLimit(ipAddress: string): Promise<void> {
-    const ipRateLimitKey = `login_ip:${ipAddress}`;
-    const ipAttempts =
-      (await this.cacheManager.get<number>(ipRateLimitKey)) || 0;
+    const attempts =
+      await this.rateLimitCacheService.incrementEmailAttempts(ipAddress);
 
     // Allow 10 attempts per IP per hour
-    if (ipAttempts >= 3) {
+    if (attempts >= 3) {
       this.logger.warn(`IP rate limit exceeded: ${ipAddress}`);
 
       Sentry.captureMessage('IP rate limit exceeded on login', {
@@ -647,7 +591,7 @@ export class AuthService {
         },
         extra: {
           ipAddress,
-          attempts: ipAttempts,
+          attempts,
         },
       });
 
@@ -656,9 +600,6 @@ export class AuthService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-
-    // Increment counter with 1-hour TTL
-    await this.cacheManager.set(ipRateLimitKey, ipAttempts + 1, 3600 * 1000);
   }
 
   /**
@@ -666,12 +607,11 @@ export class AuthService {
    * Prevents targeted attacks on specific accounts
    */
   private async checkEmailRateLimit(email: string): Promise<void> {
-    const emailRateLimitKey = `login_email:${email}`;
-    const emailAttempts =
-      (await this.cacheManager.get<number>(emailRateLimitKey)) || 0;
+    const attempts =
+      await this.rateLimitCacheService.incrementEmailAttempts(email);
 
     // Allow 5 attempts per email per 15 minutes
-    if (emailAttempts >= 5) {
+    if (attempts >= 5) {
       this.logger.warn(`Email rate limit exceeded: ${email}`);
 
       Sentry.captureMessage('Email rate limit exceeded on login', {
@@ -682,7 +622,7 @@ export class AuthService {
         },
         extra: {
           email,
-          attempts: emailAttempts,
+          attempts,
         },
       });
 
@@ -691,13 +631,6 @@ export class AuthService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-
-    // Increment counter with 15-minute TTL
-    await this.cacheManager.set(
-      emailRateLimitKey,
-      emailAttempts + 1,
-      900 * 1000,
-    );
   }
 
   /**
@@ -705,23 +638,7 @@ export class AuthService {
    * Implements progressive lockout
    */
   private async isAccountLocked(email: string): Promise<boolean> {
-    const lockKey = `account_lock:${email}`;
-    const lockData = await this.cacheManager.get<{
-      lockedUntil: number;
-      attempts: number;
-    }>(lockKey);
-
-    if (!lockData) {
-      return false;
-    }
-
-    // Check if lock has expired
-    if (Date.now() > lockData.lockedUntil) {
-      await this.cacheManager.del(lockKey);
-      return false;
-    }
-
-    return true;
+    return await this.rateLimitCacheService.isAccountLocked(email);
   }
 
   /**
@@ -732,16 +649,8 @@ export class AuthService {
     ipAddress: string,
     reason: string,
   ): Promise<void> {
-    const failedAttemptsKey = `failed_login:${email}`;
-    const lockKey = `account_lock:${email}`;
-
-    // Get current failed attempts
-    const currentAttempts =
-      (await this.cacheManager.get<number>(failedAttemptsKey)) || 0;
-    const newAttempts = currentAttempts + 1;
-
-    // Store failed attempts with 30-minute TTL
-    await this.cacheManager.set(failedAttemptsKey, newAttempts, 1800 * 1000);
+    const newAttempts =
+      await this.rateLimitCacheService.incrementFailedAttempts(email);
 
     // Log failed attempt
     this.logger.warn(
@@ -750,9 +659,12 @@ export class AuthService {
 
     // Progressive lockout strategy
     if (newAttempts >= 10) {
-      // 10+ attempts: Lock for 1 hour
       const lockDuration = 3600 * 1000;
-      await this.lockAccount(email, lockKey, newAttempts, lockDuration);
+      await this.rateLimitCacheService.lockAccount(
+        email,
+        newAttempts,
+        lockDuration,
+      );
 
       Sentry.captureMessage('Account locked - excessive failed attempts', {
         level: 'error',
@@ -770,11 +682,19 @@ export class AuthService {
     } else if (newAttempts >= 7) {
       // 7-9 attempts: Lock for 15 minutes
       const lockDuration = 900 * 1000;
-      await this.lockAccount(email, lockKey, newAttempts, lockDuration);
+      await this.rateLimitCacheService.lockAccount(
+        email,
+        newAttempts,
+        lockDuration,
+      );
     } else if (newAttempts >= 5) {
       // 5-6 attempts: Lock for 5 minutes
       const lockDuration = 300 * 1000;
-      await this.lockAccount(email, lockKey, newAttempts, lockDuration);
+      await this.rateLimitCacheService.lockAccount(
+        email,
+        newAttempts,
+        lockDuration,
+      );
 
       Sentry.captureMessage('Account temporarily locked', {
         level: 'warning',
@@ -792,43 +712,13 @@ export class AuthService {
   }
 
   /**
-   * Lock account for specified duration
-   */
-  private async lockAccount(
-    email: string,
-    lockKey: string,
-    attempts: number,
-    duration: number,
-  ): Promise<void> {
-    await this.cacheManager.set(
-      lockKey,
-      {
-        lockedUntil: Date.now() + duration,
-        attempts,
-      },
-      duration,
-    );
-
-    this.logger.warn(
-      `Account locked: ${email} for ${duration / 1000} seconds after ${attempts} failed attempts`,
-    );
-  }
-
-  /**
    * Clear failed login attempts on successful login
    */
   private async clearFailedAttempts(
     email: string,
     ipAddress: string,
   ): Promise<void> {
-    const failedAttemptsKey = `failed_login:${email}`;
-    const lockKey = `account_lock:${email}`;
-
-    await Promise.all([
-      this.cacheManager.del(failedAttemptsKey),
-      this.cacheManager.del(lockKey),
-    ]);
-
+    await this.rateLimitCacheService.clearFailedAttempts(email);
     this.logger.log(`Cleared failed attempts for ${email}`);
   }
 
@@ -905,12 +795,10 @@ export class AuthService {
 
     try {
       // 1. Rate limit by IP (global)
-      const ipRateLimitKey = `pwd_reset_ip:${ipAddress}`;
-      const currentIpAttempts =
-        (await this.cacheManager.get<number>(ipRateLimitKey)) || 0;
-      const ipAttempts = currentIpAttempts + 1;
-
-      await this.cacheManager.set(ipRateLimitKey, ipAttempts, 3600 * 1000);
+      const ipAttempts =
+        await this.rateLimitCacheService.incrementPasswordResetIpAttempts(
+          ipAddress,
+        );
 
       if (ipAttempts > 3) {
         this.logger.warn(
@@ -927,17 +815,10 @@ export class AuthService {
       }
 
       // 2. Rate limit by email
-      const emailRateLimitKey = `pwd_reset_email:${email}`;
-      const currentEmailAttempts =
-        (await this.cacheManager.get<number>(emailRateLimitKey)) || 0;
-      const emailAttempts = currentEmailAttempts + 1;
-
-      await this.cacheManager.set(
-        emailRateLimitKey,
-        emailAttempts,
-        3600 * 1000,
-      );
-
+      const emailAttempts =
+        await this.rateLimitCacheService.incrementPasswordResetEmailAttempts(
+          email,
+        );
       const emailRateLimited = emailAttempts > 3;
 
       // Find user by email (always execute)
@@ -995,7 +876,6 @@ export class AuthService {
             },
           })
           .catch((error) => {
-            // Log error to Sentry
             Sentry.captureException(error, {
               tags: {
                 operation: 'password_reset',
