@@ -1,14 +1,11 @@
 import { AuthService } from '@/auth/auth.service';
-import { ConfigService } from '@/config/config.service';
 import { DrizzleService } from '@/drizzle/drizzle.service';
-import { S3Service } from '@/s3/s3.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
   ConflictException,
   Inject,
   Injectable,
-  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -17,8 +14,7 @@ import { UpdatedMeDataDto } from './dtos/update-me.dto';
 import { UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
 import type { Cache } from 'cache-manager';
-import * as Sentry from '@sentry/nestjs';
-import { InngestClientService } from '@/inngest/services/inngest.service';
+import { S3HealthService } from '@/s3/services/s3-health.service';
 
 @Injectable()
 export class UsersService {
@@ -27,23 +23,15 @@ export class UsersService {
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private jwtService: JwtService,
     private dbService: DrizzleService,
-    private s3Service: S3Service,
-    private inngestHealth: InngestClientService,
-    private configService: ConfigService,
+    private s3Health: S3HealthService,
   ) {}
 
   private getTimestamp(): string {
     return new Date().toISOString();
   }
 
-  private get s3Server() {
-    if (!this.s3Service) {
-      const message = `S3 service is down at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Storage service unavailable');
-    }
-    return this.s3Service;
+  private get s3() {
+    return this.s3Health.getS3();
   }
 
   updateMe = async (
@@ -97,7 +85,7 @@ export class UsersService {
         oldImageUrl = currentUser?.imageUrl;
 
         // Upload new image
-        const { key, url } = await this.s3Server.uploadFileAndGetUrl(
+        const { key, url } = await this.s3.uploadFileAndGetUrl(
           imageFile,
           'users',
           'avatars',
@@ -125,7 +113,7 @@ export class UsersService {
       if (!updatedUser) {
         // Cleanup uploaded file if update failed
         if (uploadedImageKey) {
-          await this.s3Server.deleteFile(uploadedImageKey);
+          await this.s3.deleteFile(uploadedImageKey);
         }
         throw new NotFoundException('User not found');
       }
@@ -135,7 +123,7 @@ export class UsersService {
         try {
           // Extract the key from the old URL
           const oldKey = oldImageUrl.split('/').slice(3).join('/');
-          await this.s3Server.deleteFile(oldKey);
+          await this.s3.deleteFile(oldKey);
         } catch (deleteError) {
           // Log but don't fail the request if old image deletion fails
           this.logger.warn(
@@ -165,7 +153,7 @@ export class UsersService {
         this.logger.warn(
           `Operation failed. Deleting orphaned file: ${uploadedImageKey}`,
         );
-        await this.s3Server
+        await this.s3
           .deleteFile(uploadedImageKey)
           .catch((e) =>
             this.logger.error(

@@ -105,16 +105,9 @@ export class S3Service {
     const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     const imageKey = getImageKey(category, subcategory, sanitizedName);
 
-    // Add logging to see what's being uploaded
-    console.log('📤 Uploading to R2 with key:', imageKey);
-
     await this.uploadFile(file, imageKey);
 
-    console.log('✅ Upload completed for key:', imageKey);
-
     const imageUrl = this.getPublicUrl(imageKey);
-
-    console.log('🔗 Public URL:', imageUrl);
 
     return { key: imageKey, url: imageUrl };
   }

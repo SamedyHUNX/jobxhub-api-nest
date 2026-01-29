@@ -1,5 +1,4 @@
 import { DrizzleService } from '@/drizzle/drizzle.service';
-import { S3Service } from '@/s3/s3.service';
 import {
   BadRequestException,
   ConflictException,
@@ -13,7 +12,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SignInDto, SignUpDto } from './dtos/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
-import { capitalizeString, getImageKey, hashPassword } from '@/utils/helpers';
+import { capitalizeString, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
@@ -21,8 +20,8 @@ import { ConfigService } from '@/config/config.service';
 import * as Sentry from '@sentry/nestjs';
 import { UserCacheService } from '@/cache/services/user-cache.service';
 import { RateLimitCacheService } from '@/cache/services/rate-limit-cache.service';
-import { InngestClientService } from '@/inngest/services/inngest.service';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
+import { S3HealthService } from '@/s3/services/s3-health.service';
 
 @Injectable()
 export class AuthService {
@@ -31,7 +30,7 @@ export class AuthService {
     private userCacheService: UserCacheService,
     private jwtService: JwtService,
     private dbService: DrizzleService,
-    private s3Service: S3Service,
+    private s3Health: S3HealthService,
     private configService: ConfigService,
     private rateLimitCacheService: RateLimitCacheService,
     private inngestHealth: InngestHealthService,
@@ -55,14 +54,8 @@ export class AuthService {
     return this.dbService.db;
   }
 
-  private get s3Server() {
-    if (!this.s3Service) {
-      const message = `S3 service is down at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Storage service unavailable');
-    }
-    return this.s3Service;
+  private get s3() {
+    return this.s3Health.getS3();
   }
 
   private generateToken(payload: any) {
@@ -169,8 +162,11 @@ export class AuthService {
       }
     }
 
-    const { key: imageKey, url: imageUrl } =
-      await this.s3Server.uploadFileAndGetUrl(imageFile, 'users', 'avatars');
+    const { key: imageKey, url: imageUrl } = await this.s3.uploadFileAndGetUrl(
+      imageFile,
+      'users',
+      'avatars',
+    );
 
     try {
       const hashedPassword = await hashPassword(password);
@@ -214,7 +210,7 @@ export class AuthService {
           })
           .returning();
       } catch (dbError: any) {
-        await this.s3Server.deleteFile(imageKey);
+        await this.s3.deleteFile(imageKey);
 
         // Handle unique constraint violation
         if (dbError.code === '23505') {
@@ -248,7 +244,7 @@ export class AuthService {
         await this.dbServer.delete(UserTable).where(eq(UserTable.id, user.id));
 
         // Delete the uploaded image
-        await this.s3Server.deleteFile(imageKey);
+        await this.s3.deleteFile(imageKey);
 
         Sentry.captureException(inngestError, {
           extra: {
@@ -274,7 +270,7 @@ export class AuthService {
       this.logger.warn(
         `Database insertion failed. Deleting orphaned file: ${imageKey}`,
       );
-      await this.s3Server
+      await this.s3
         .deleteFile(imageKey)
         .catch((e) =>
           this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),

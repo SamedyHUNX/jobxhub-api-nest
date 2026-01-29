@@ -1,4 +1,3 @@
-import { CacheHealthService } from '@/cache/services/cache-health.service';
 import {
   Inject,
   Injectable,
@@ -10,7 +9,7 @@ import { InngestClientService } from './inngest.service';
 
 @Injectable()
 export class InngestHealthService {
-  private readonly logger = new Logger(CacheHealthService.name);
+  private readonly logger = new Logger(InngestHealthService.name);
 
   constructor(private inngestService: InngestClientService) {}
 
@@ -19,7 +18,7 @@ export class InngestHealthService {
       const message = `Inngest client is down at ${new Date().toISOString()}`;
       this.logger.error(message);
       Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Event service unavailable');
+      throw new InternalServerErrorException('Inngest service unavailable');
     }
     return this.inngestService.inngest;
   }

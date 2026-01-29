@@ -1,6 +1,6 @@
 import { ConfigService } from '@/config/config.service';
 import { DrizzleService } from '@/drizzle/drizzle.service';
-import { S3Service } from '@/s3/s3.service';
+import { S3Service } from '@/s3/services/s3.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
