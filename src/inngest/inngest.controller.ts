@@ -1,7 +1,7 @@
 import { All, Controller, Module, Req, Res } from '@nestjs/common';
 import { serve } from 'inngest/express';
-import { InngestClientService } from './inngest.service';
 import { UserFunctionsService } from './functions/functions.service';
+import { InngestClientService } from './services/inngest.service';
 
 @Controller('inngest')
 export class InngestController {

@@ -17,11 +17,12 @@ import { capitalizeString, getImageKey, hashPassword } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
-import { InngestClientService } from '@/inngest/inngest.service';
 import { ConfigService } from '@/config/config.service';
 import * as Sentry from '@sentry/nestjs';
 import { UserCacheService } from '@/cache/services/user-cache.service';
 import { RateLimitCacheService } from '@/cache/services/rate-limit-cache.service';
+import { InngestClientService } from '@/inngest/services/inngest.service';
+import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 
 @Injectable()
 export class AuthService {
@@ -31,19 +32,13 @@ export class AuthService {
     private jwtService: JwtService,
     private dbService: DrizzleService,
     private s3Service: S3Service,
-    private inngestService: InngestClientService,
     private configService: ConfigService,
     private rateLimitCacheService: RateLimitCacheService,
+    private inngestHealth: InngestHealthService,
   ) {}
 
   private get inngest() {
-    if (!this.inngestService || !this.inngestService.inngest) {
-      const message = `Inngest client is down at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Event service unavailable');
-    }
-    return this.inngestService.inngest;
+    return this.inngestHealth.getInngest();
   }
 
   private getTimestamp(): string {

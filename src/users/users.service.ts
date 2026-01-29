@@ -1,7 +1,6 @@
 import { AuthService } from '@/auth/auth.service';
 import { ConfigService } from '@/config/config.service';
 import { DrizzleService } from '@/drizzle/drizzle.service';
-import { InngestClientService } from '@/inngest/inngest.service';
 import { S3Service } from '@/s3/s3.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
@@ -19,6 +18,7 @@ import { UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
 import type { Cache } from 'cache-manager';
 import * as Sentry from '@sentry/nestjs';
+import { InngestClientService } from '@/inngest/services/inngest.service';
 
 @Injectable()
 export class UsersService {
@@ -28,7 +28,7 @@ export class UsersService {
     private jwtService: JwtService,
     private dbService: DrizzleService,
     private s3Service: S3Service,
-    private inngestService: InngestClientService,
+    private inngestHealth: InngestClientService,
     private configService: ConfigService,
   ) {}
 

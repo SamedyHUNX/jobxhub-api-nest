@@ -1,6 +1,5 @@
 import { ConfigService } from '@/config/config.service';
 import { DrizzleService } from '@/drizzle/drizzle.service';
-import { InngestClientService } from '@/inngest/inngest.service';
 import { S3Service } from '@/s3/s3.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
@@ -21,6 +20,7 @@ import {
 } from '@/drizzle/schema';
 import type { Cache } from 'cache-manager';
 import { and, eq, like, or } from 'drizzle-orm';
+import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -31,7 +31,7 @@ export class OrganizationsService {
     private dbService: DrizzleService,
     private s3Service: S3Service,
     private readonly configService: ConfigService,
-    private inngestService: InngestClientService,
+    private inngestHealth: InngestHealthService,
   ) {}
 
   private get redisCache() {
@@ -45,13 +45,7 @@ export class OrganizationsService {
   }
 
   private get inngest() {
-    if (!this.inngestService || !this.inngestService.inngest) {
-      const message = `Inngest client is down at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Event service unavailable');
-    }
-    return this.inngestService.inngest;
+    return this.inngestHealth.getInngest();
   }
 
   private getTimestamp(): string {

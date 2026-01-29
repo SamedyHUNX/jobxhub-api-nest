@@ -1,7 +1,7 @@
+import { ConfigService } from '@/config/config.service';
 import { Injectable } from '@nestjs/common';
 import { EventSchemas, Inngest } from 'inngest';
-import { Events } from './types/events.type';
-import { ConfigService } from '../config/config.service';
+import { Events } from '../types/events.type';
 
 @Injectable()
 export class InngestClientService {
