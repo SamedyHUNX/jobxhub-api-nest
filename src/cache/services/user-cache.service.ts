@@ -84,14 +84,15 @@ export class UserCacheService {
       // Delete main session cache
       await this.cache.del(`session:${userId}`);
 
-      // Delete pattern-based sessions
-      const redisClient = await this.cacheHealth.getRawRedisClient();
-      const sessionKeys = await redisClient.keys(`session:${userId}:*`);
+      // Check if the cache store supports pattern deletion
+      const store = (this.cache as any).store;
+      if (store && store.keys) {
+        const pattern = `session:${userId}:*`;
+        const keys = await store.keys(pattern);
 
-      if (sessionKeys.length > 0) {
-        await Promise.all(
-          sessionKeys.map((key: string) => this.cache.del(key)),
-        );
+        if (keys.length > 0) {
+          await Promise.all(keys.map((key: string) => this.cache.del(key)));
+        }
       }
 
       this.logger.log(`All sessions invalidated for user ID: ${userId}`);

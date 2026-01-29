@@ -1,5 +1,5 @@
 import { AuthService } from '@/auth/auth.service';
-import { DrizzleService } from '@/drizzle/drizzle.service';
+import { DrizzleService } from '@/drizzle/services/drizzle.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,

@@ -1,5 +1,5 @@
 import { ConfigService } from '@/config/config.service';
-import { DrizzleService } from '@/drizzle/drizzle.service';
+import { DrizzleService } from '@/drizzle/services/drizzle.service';
 import { S3Service } from '@/s3/services/s3.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {

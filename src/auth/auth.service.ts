@@ -1,4 +1,4 @@
-import { DrizzleService } from '@/drizzle/drizzle.service';
+import { DrizzleService } from '@/drizzle/services/drizzle.service';
 import {
   BadRequestException,
   ConflictException,
@@ -22,6 +22,7 @@ import { UserCacheService } from '@/cache/services/user-cache.service';
 import { RateLimitCacheService } from '@/cache/services/rate-limit-cache.service';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 import { S3HealthService } from '@/s3/services/s3-health.service';
+import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 
 @Injectable()
 export class AuthService {
@@ -34,6 +35,7 @@ export class AuthService {
     private configService: ConfigService,
     private rateLimitCacheService: RateLimitCacheService,
     private inngestHealth: InngestHealthService,
+    private dbHealth: DrizzleHealthService,
   ) {}
 
   private get inngest() {
@@ -44,14 +46,8 @@ export class AuthService {
     return new Date().toISOString();
   }
 
-  private get dbServer() {
-    if (!this.dbService.db) {
-      const message = `Database connection not established at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Database unavailable');
-    }
-    return this.dbService.db;
+  private get db() {
+    return this.dbHealth.getDb();
   }
 
   private get s3() {
@@ -147,7 +143,7 @@ export class AuthService {
     }
 
     // Check if email or username already exists
-    const existingUser = await this.dbServer
+    const existingUser = await this.db
       .select()
       .from(UserTable)
       .where(or(eq(UserTable.email, email), eq(UserTable.username, username)))
@@ -193,7 +189,7 @@ export class AuthService {
       let user;
 
       try {
-        [user] = await this.dbServer
+        [user] = await this.db
           .insert(UserTable)
           .values({
             username,
@@ -241,7 +237,7 @@ export class AuthService {
         });
       } catch (inngestError: any) {
         // Rollback: Delete the user we just created
-        await this.dbServer.delete(UserTable).where(eq(UserTable.id, user.id));
+        await this.db.delete(UserTable).where(eq(UserTable.id, user.id));
 
         // Delete the uploaded image
         await this.s3.deleteFile(imageKey);
@@ -291,7 +287,7 @@ export class AuthService {
 
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
-    const [user] = await this.dbServer
+    const [user] = await this.db
       .select()
       .from(UserTable)
       .where(
@@ -309,7 +305,7 @@ export class AuthService {
       );
 
       // Check if it's an expired token (user exists but token expired)
-      const [expiredUser] = await this.dbServer
+      const [expiredUser] = await this.db
         .select()
         .from(UserTable)
         .where(eq(UserTable.verificationToken, hashedToken))
@@ -336,7 +332,7 @@ export class AuthService {
     }
 
     try {
-      await this.dbServer
+      await this.db
         .update(UserTable)
         .set({
           isVerified: true,
@@ -429,7 +425,7 @@ export class AuthService {
       if (cachedUser) {
         user = cachedUser;
 
-        const [dbStatus] = await this.dbServer
+        const [dbStatus] = await this.db
           .select({
             isBanned: UserTable.isBanned,
             isDisabled: UserTable.isDisabled,
@@ -470,7 +466,7 @@ export class AuthService {
 
         await this.cacheUser(user);
       } else {
-        const [dbUser] = await this.dbServer
+        const [dbUser] = await this.db
           .select()
           .from(UserTable)
           .where(eq(UserTable.email, email))
@@ -742,7 +738,7 @@ export class AuthService {
     }
 
     // Cache miss - fetch from database
-    const [user] = await this.dbServer
+    const [user] = await this.db
       .select()
       .from(UserTable)
       .where(eq(UserTable.id, payload.sub))
@@ -813,7 +809,7 @@ export class AuthService {
       const emailRateLimited = emailAttempts > 3;
 
       // Find user by email (always execute)
-      const [user] = await this.dbServer
+      const [user] = await this.db
         .select()
         .from(UserTable)
         .where(eq(UserTable.email, email))
@@ -837,7 +833,7 @@ export class AuthService {
 
       // Update database if user exists and should send email
       if (shouldSendEmail) {
-        await this.dbServer
+        await this.db
           .update(UserTable)
           .set({
             resetPasswordToken: hashedToken,
@@ -957,7 +953,7 @@ export class AuthService {
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
     // Find user by reset token and check expiration
-    const [user] = await this.dbServer
+    const [user] = await this.db
       .select()
       .from(UserTable)
       .where(
@@ -977,7 +973,7 @@ export class AuthService {
     const hashedPassword = await hashPassword(newPassword);
 
     // Update user's password and clear reset token fields
-    await this.dbServer
+    await this.db
       .update(UserTable)
       .set({
         password: hashedPassword,
@@ -1002,7 +998,7 @@ export class AuthService {
   async signOut(userId: string) {
     try {
       // 1. Get user data to clear cache properly
-      const [user] = await this.dbServer
+      const [user] = await this.db
         .select({
           id: UserTable.id,
           email: UserTable.email,
@@ -1020,7 +1016,7 @@ export class AuthService {
       }
 
       // 2. Increment token version to invalidate all existing tokens
-      await this.dbServer
+      await this.db
         .update(UserTable)
         .set({
           tokenVersion: user.tokenVersion + 1,
