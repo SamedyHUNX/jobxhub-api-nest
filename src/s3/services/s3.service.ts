@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import {
   S3Client,
   GetObjectCommand,
@@ -10,6 +14,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
 import { ConfigService } from '@/config/config.service';
+import { getImageKey } from '@/utils/helpers';
 
 @Injectable()
 export class S3Service {
@@ -52,6 +57,59 @@ export class S3Service {
 
     this.s3Client = new S3Client(clientConfig);
     this.bucketName = bucketName;
+  }
+
+  /**
+   * Get the public domain URL based on storage provider
+   * @returns Public domain URL
+   * @throws InternalServerErrorException if domain is not configured
+   */
+  private getPublicDomain(): string {
+    const storageProvider = this.configService.storageProvider;
+    const publicDomain =
+      storageProvider === 'r2'
+        ? this.configService.r2PublicDomain
+        : this.configService.awsS3PublicDomain;
+
+    if (!publicDomain) {
+      throw new InternalServerErrorException(
+        'Storage public domain is not configured',
+      );
+    }
+
+    return publicDomain;
+  }
+
+  /**
+   * Build full public URL from a key
+   * @param key - S3 object key
+   * @returns Full public URL
+   */
+  getPublicUrl(key: string): string {
+    const domain = this.getPublicDomain();
+    return `${domain}/${key}`;
+  }
+
+  /**
+   * Upload file and return its public URL
+   * @param file - The file to upload
+   * @param category - Category of the file (e.g., 'user', 'organization')
+   * @param subcategory - Subcategory (e.g., 'avatar', 'logo')
+   * @returns Object containing the S3 key and public URL
+   */
+  async uploadFileAndGetUrl(
+    file: Express.Multer.File,
+    category: string,
+    subcategory: string,
+  ): Promise<{ key: string; url: string }> {
+    const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const imageKey = getImageKey(category, subcategory, sanitizedName);
+
+    await this.uploadFile(file, imageKey);
+
+    const imageUrl = this.getPublicUrl(imageKey);
+
+    return { key: imageKey, url: imageUrl };
   }
 
   // Upload file to S3

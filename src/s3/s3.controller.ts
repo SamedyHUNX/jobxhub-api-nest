@@ -10,7 +10,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { S3Service } from './s3.service';
+import { S3Service } from './services/s3.service';
 import type { Response } from 'express';
 
 const fileSizeLimit = Number(process.env.R2_FILE_SIZE_LIMIT);

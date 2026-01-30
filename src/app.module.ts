@@ -5,12 +5,13 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { S3Module } from './s3/s3.module';
 import { InngestModule } from './inngest/inngest.module';
-import { RedisModule } from './redis/redis.module';
 import { DrizzleModule } from './drizzle/drizzle.module';
 import { ConfigService } from './config/config.service';
 import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { UsersModule } from './users/user.module';
+import { CacheModule } from './cache/cache.module';
 
 @Module({
   imports: [
@@ -18,9 +19,10 @@ import { OrganizationsModule } from './organizations/organizations.module';
     AuthModule,
     S3Module,
     InngestModule,
-    RedisModule,
+    CacheModule,
     DrizzleModule,
     OrganizationsModule,
+    UsersModule,
     SentryModule.forRoot(),
   ],
   controllers: [AppController],

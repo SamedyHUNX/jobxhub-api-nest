@@ -1,13 +1,16 @@
 import { Module } from '@nestjs/common';
-import { CacheModule } from '@nestjs/cache-manager';
+import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
 import Keyv from 'keyv';
 import KeyvRedis from '@keyv/redis';
 import { ConfigService } from '@/config/config.service';
 import { AppConfigModule } from '@/config/config.module';
+import { UserCacheService } from './services/user-cache.service';
+import { RateLimitCacheService } from './services/rate-limit-cache.service';
+import { CacheHealthService } from './services/cache-health.service';
 
 @Module({
   imports: [
-    CacheModule.registerAsync({
+    NestCacheModule.registerAsync({
       imports: [AppConfigModule],
       inject: [ConfigService],
       isGlobal: true,
@@ -15,7 +18,6 @@ import { AppConfigModule } from '@/config/config.module';
         const host = configService.redisHost || 'localhost';
         const port = configService.redisPort || 6379;
         const password = configService.redisPw;
-        // Construct Redis URL: redis://[:password@]host:port
         const url = `redis://${password ? `:${encodeURIComponent(password)}@` : ''}${host}:${port}`;
 
         return {
@@ -27,5 +29,7 @@ import { AppConfigModule } from '@/config/config.module';
       },
     }),
   ],
+  providers: [UserCacheService, RateLimitCacheService, CacheHealthService],
+  exports: [UserCacheService, RateLimitCacheService, CacheHealthService],
 })
-export class RedisModule {}
+export class CacheModule {}

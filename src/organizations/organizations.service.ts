@@ -1,7 +1,6 @@
 import { ConfigService } from '@/config/config.service';
-import { DrizzleService } from '@/drizzle/drizzle.service';
-import { InngestClientService } from '@/inngest/inngest.service';
-import { S3Service } from '@/s3/s3.service';
+import { DrizzleService } from '@/drizzle/services/drizzle.service';
+import { S3Service } from '@/s3/services/s3.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
@@ -21,6 +20,7 @@ import {
 } from '@/drizzle/schema';
 import type { Cache } from 'cache-manager';
 import { and, eq, like, or } from 'drizzle-orm';
+import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -31,8 +31,8 @@ export class OrganizationsService {
     private dbService: DrizzleService,
     private s3Service: S3Service,
     private readonly configService: ConfigService,
-    private inngestService: InngestClientService,
-  ) { }
+    private inngestHealth: InngestHealthService,
+  ) {}
 
   private get redisCache() {
     if (!this.cacheManager) {
@@ -45,13 +45,7 @@ export class OrganizationsService {
   }
 
   private get inngest() {
-    if (!this.inngestService || !this.inngestService.inngest) {
-      const message = `Inngest client is down at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Event service unavailable');
-    }
-    return this.inngestService.inngest;
+    return this.inngestHealth.getInngest();
   }
 
   private getTimestamp(): string {
@@ -120,7 +114,7 @@ export class OrganizationsService {
   // Create an organization
   create = async (
     data: CreateOrganizationDto,
-    file: Express.Multer.File,
+    imageFile: Express.Multer.File,
     userId: string,
   ) => {
     const { orgName, slug } = data;
@@ -146,30 +140,12 @@ export class OrganizationsService {
       }
     }
 
-    let imageUrl: string | undefined;
-    let imageKey: string | undefined;
-
-    // Upload image to S3 if provided
-    if (file && file.originalname) {
-      const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-      imageKey = `organizations/logos/${Date.now()}-${sanitizedName}`;
-
-      await this.s3Server.uploadFile(file, imageKey);
-
-      // Get S3 URL from config
-      const storageProvider = this.configService.storageProvider;
-      const publicDomain =
-        storageProvider === 'r2'
-          ? this.configService.r2PublicDomain
-          : this.configService.awsS3PublicDomain;
-
-      if (!publicDomain) {
-        await this.s3Server.deleteFile(imageKey);
-        throw new InternalServerErrorException('Storage configuration error');
-      }
-
-      imageUrl = `${publicDomain}/${imageKey}`;
-    }
+    const { key: imageKey, url: imageUrl } =
+      await this.s3Server.uploadFileAndGetUrl(
+        imageFile,
+        'organizations',
+        'logos',
+      );
 
     try {
       let organization;
@@ -187,9 +163,7 @@ export class OrganizationsService {
           .returning();
       } catch (dbError: any) {
         // Cleanup uploaded file if database insert fails
-        if (imageKey) {
-          await this.s3Server.deleteFile(imageKey);
-        }
+        await this.s3Server.deleteFile(imageKey);
 
         // Handle unique constraint violation
         if (dbError.code === '23505') {
@@ -216,10 +190,8 @@ export class OrganizationsService {
           .delete(OrganizationTable)
           .where(eq(OrganizationTable.id, organization.id));
 
-        // Delete the uploaded image if exists
-        if (imageKey) {
-          await this.s3Server.deleteFile(imageKey);
-        }
+        // Delete the uploaded image
+        await this.s3Server.deleteFile(imageKey);
 
         this.logger.error(
           `Failed to create organization user settings: ${settingsError?.message ?? settingsError}`,
@@ -241,16 +213,12 @@ export class OrganizationsService {
       };
     } catch (error) {
       // Final cleanup for any uncaught errors
-      if (imageKey) {
-        this.logger.warn(
-          `Operation failed. Deleting orphaned file: ${imageKey}`,
+      this.logger.warn(`Operation failed. Deleting orphaned file: ${imageKey}`);
+      await this.s3Server
+        .deleteFile(imageKey)
+        .catch((e) =>
+          this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),
         );
-        await this.s3Server
-          .deleteFile(imageKey)
-          .catch((e) =>
-            this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),
-          );
-      }
       throw error;
     }
   };
