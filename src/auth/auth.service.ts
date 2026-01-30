@@ -1,4 +1,3 @@
-import { DrizzleService } from '@/drizzle/services/drizzle.service';
 import {
   BadRequestException,
   ConflictException,
@@ -12,9 +11,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SignInDto, SignUpDto } from './dtos/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
-import { capitalizeString, hashPassword } from '@/utils/helpers';
+import { capitalizeString } from '@/utils/helpers';
 import * as crypto from 'crypto';
-import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
 import { ConfigService } from '@/config/config.service';
 import * as Sentry from '@sentry/nestjs';
@@ -23,6 +21,7 @@ import { RateLimitCacheService } from '@/cache/services/rate-limit-cache.service
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
+import { HashingService } from '@/common/services/hashing.service';
 
 @Injectable()
 export class AuthService {
@@ -30,7 +29,7 @@ export class AuthService {
   constructor(
     private userCacheService: UserCacheService,
     private jwtService: JwtService,
-    private dbService: DrizzleService,
+    private hashingService: HashingService,
     private s3Health: S3HealthService,
     private configService: ConfigService,
     private rateLimitCacheService: RateLimitCacheService,
@@ -106,6 +105,14 @@ export class AuthService {
     }
   };
 
+  private hashPassword = async (password: string) => {
+    return await this.hashingService.hash(password);
+  };
+
+  private verifyPassword = async (password: string, storedPassword: string) => {
+    return await this.hashingService.verify(storedPassword, password);
+  };
+
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -165,7 +172,7 @@ export class AuthService {
     );
 
     try {
-      const hashedPassword = await hashPassword(password);
+      const hashedPassword = await this.hashPassword(password);
       const capitalizedFirstName = capitalizeString(firstName);
       const capitalizedLastName = capitalizeString(lastName);
 
@@ -501,7 +508,7 @@ export class AuthService {
         await this.cacheUser(user);
       }
 
-      const isPasswordValid = await bcrypt.compare(password, passwordHash);
+      const isPasswordValid = await this.verifyPassword(password, passwordHash);
 
       if (!isPasswordValid) {
         await this.handleFailedLogin(email, ipAddress, 'invalid_password');
@@ -970,7 +977,7 @@ export class AuthService {
     }
 
     // Hash new password
-    const hashedPassword = await hashPassword(newPassword);
+    const hashedPassword = await this.hashingService.hash(newPassword);
 
     // Update user's password and clear reset token fields
     await this.db

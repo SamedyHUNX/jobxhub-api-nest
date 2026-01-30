@@ -12,6 +12,7 @@ import { APP_FILTER } from '@nestjs/core';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { UsersModule } from './users/user.module';
 import { CacheModule } from './cache/cache.module';
+import { JobListingsModule } from './job-listings/job-listings.module';
 
 @Module({
   imports: [
@@ -23,7 +24,9 @@ import { CacheModule } from './cache/cache.module';
     DrizzleModule,
     OrganizationsModule,
     UsersModule,
+    JobListingsModule,
     SentryModule.forRoot(),
+    JobListingsModule,
   ],
   controllers: [AppController],
   providers: [

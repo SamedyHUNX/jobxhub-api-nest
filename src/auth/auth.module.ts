@@ -9,6 +9,7 @@ import { InngestModule } from '@/inngest/inngest.module';
 import { ConfigService } from '@/config/config.service';
 import { AppConfigModule } from '@/config/config.module';
 import { CacheModule } from '@/cache/cache.module';
+import { CommonModule } from '@/common/common.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { CacheModule } from '@/cache/cache.module';
     InngestModule,
     AppConfigModule,
     CacheModule,
+    CommonModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
