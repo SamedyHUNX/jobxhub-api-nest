@@ -1,34 +1,35 @@
 import { AuthService } from '@/auth/auth.service';
 import { DrizzleService } from '@/drizzle/services/drizzle.service';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
   ConflictException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { UpdatedMeDataDto } from './dtos/update-me.dto';
 import { UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
-import type { Cache } from 'cache-manager';
 import { S3HealthService } from '@/s3/services/s3-health.service';
+import { UserCacheService } from '@/cache/services/user-cache.service';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(AuthService.name);
   constructor(
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-    private jwtService: JwtService,
     private dbService: DrizzleService,
     private s3Health: S3HealthService,
-  ) {}
+    private userCacheService: UserCacheService,
+  ) { }
 
   private getTimestamp(): string {
     return new Date().toISOString();
   }
+
+  private get userCache() {
+    return this.userCacheService;
+  }
+
 
   private get s3() {
     return this.s3Health.getS3();
@@ -133,8 +134,7 @@ export class UsersService {
       }
 
       // Invalidate cache for this user using the same keys as auth.service
-      await this.cacheManager.del(`user:id:${userId}`);
-      await this.cacheManager.del(`user:email:${updatedUser.email}`);
+      await this.userCache.invalidateUser(updatedUser.email, updatedUser.id);
 
       // Remove password from response
       const { password, ...userWithoutPassword } = updatedUser;

@@ -32,7 +32,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   // Sign Up (/api/auth/signup)
   @Post('sign-up')
@@ -60,6 +60,8 @@ export class AuthController {
   }
 
   // Sign In (/api/auth/signin)
+  @ApiOperation({ summary: 'Sign in' })
+  @ApiResponse({ status: 200, description: 'Sign in' })
   @Post('sign-in')
   async signIn(
     @Body() data: SignInDto,
@@ -86,6 +88,8 @@ export class AuthController {
   }
 
   // Get current user (/api/auth/me)
+  @ApiOperation({ summary: 'Get current user' })
+  @ApiResponse({ status: 200, description: 'Get current user' })
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
@@ -96,6 +100,8 @@ export class AuthController {
   }
 
   // POST forgot-password
+  @ApiOperation({ summary: 'Forgot password' })
+  @ApiResponse({ status: 200, description: 'Forgot password' })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   async requestPasswordReset(
@@ -106,6 +112,8 @@ export class AuthController {
     return this.authService.forgotPassword(email, acceptLanguage, ipAddress);
   }
 
+  @ApiOperation({ summary: 'Reset password' })
+  @ApiResponse({ status: 200, description: 'Reset password' })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(
@@ -118,6 +126,8 @@ export class AuthController {
     );
   }
 
+  @ApiOperation({ summary: 'Sign out' })
+  @ApiResponse({ status: 200, description: 'Sign out' })
   @Post('sign-out')
   @UseGuards(JwtAuthGuard)
   async signOut(@Res() res: Response, @CurrentUser() user: any) {

@@ -7,6 +7,7 @@ import { InngestModule } from '@/inngest/inngest.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@/common/services/config.service';
 import { CommonModule } from '@/common/common.module';
+import { CacheModule } from '@/cache/cache.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { CommonModule } from '@/common/common.module';
     PassportModule,
     InngestModule,
     CommonModule,
+    CacheModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {

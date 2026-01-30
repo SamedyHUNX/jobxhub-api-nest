@@ -57,6 +57,10 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
+  private get userCache() {
+    return this.userCacheService;
+  }
+
   private async generateAndHashToken(expireMinutes: number) {
     const token = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
@@ -65,29 +69,29 @@ export class AuthService {
   }
 
   private async getCachedUser(email: string) {
-    return await this.userCacheService.getUserByEmail(email);
+    return await this.userCache.getUserByEmail(email);
   }
 
   private async getCachedUserById(userId: string) {
-    return await this.userCacheService.getUserById(userId);
+    return await this.userCache.getUserById(userId);
   }
 
   private async cacheUser(user: any) {
-    await this.userCacheService.setUser(user);
+    await this.userCache.setUser(user);
   }
 
   private async clearCachedUser(user: any) {
-    await this.userCacheService.clearUser(user);
+    await this.userCache.clearUser(user);
   }
 
   // Helper method to invalidate user cache
   private async invalidateUserCache(email: string, userId: string) {
-    await this.userCacheService.invalidateUser(email, userId);
+    await this.userCache.invalidateUser(email, userId);
   }
 
   // Invalidate all sessions (force re-login on all devices)
   private async invalidateAllUserSessions(userId: string) {
-    await this.userCacheService.invalidateAllSessions(userId);
+    await this.userCache.invalidateAllSessions(userId);
   }
 
   private addConstantTimeDelay = async (startTime: number) => {
