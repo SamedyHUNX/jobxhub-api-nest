@@ -61,6 +61,10 @@ export class AuthService {
     return this.userCacheService;
   }
 
+  private get rateLimitCache() {
+    return this.rateLimitCacheService;
+  }
+
   private async generateAndHashToken(expireMinutes: number) {
     const token = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
@@ -416,16 +420,17 @@ export class AuthService {
         await this.checkIpRateLimit(ipAddress);
 
         // 2. Check email-based rate limiting (account protection)
-        await this.checkEmailRateLimit(email);
-      }
+        await this.rateLimitCache.checkEmailRateLimit(email);
 
-      // 3. Check for account lockout
-      const isLocked = await this.isAccountLocked(email);
-      if (isLocked) {
-        await this.addConstantTimeDelay(startTime);
-        throw new UnauthorizedException(
-          'Account temporarily locked due to multiple failed login attempts. Please try again later or reset your password.',
-        );
+        // 3. Check for account lockout
+        const isLocked = await this.rateLimitCache.isAccountLocked(email);
+
+        if (isLocked) {
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException(
+            'Account temporarily locked due to multiple failed login attempts. Please try again later or reset your password.',
+          );
+        }
       }
 
       const cachedUser = await this.getCachedUser(email);
@@ -449,7 +454,7 @@ export class AuthService {
           .limit(1);
 
         if (!dbStatus) {
-          await this.handleFailedLogin(email, ipAddress, 'user_not_found');
+          await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'user_not_found');
           await this.addConstantTimeDelay(startTime);
           throw new UnauthorizedException('Invalid credentials');
         }
@@ -484,7 +489,7 @@ export class AuthService {
           .limit(1);
 
         if (!dbUser) {
-          await this.handleFailedLogin(email, ipAddress, 'user_not_found');
+          await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'user_not_found');
           await this.addConstantTimeDelay(startTime);
           throw new UnauthorizedException('Invalid credentials');
         }
@@ -515,13 +520,13 @@ export class AuthService {
       const isPasswordValid = await this.verifyPassword(password, passwordHash);
 
       if (!isPasswordValid) {
-        await this.handleFailedLogin(email, ipAddress, 'invalid_password');
+        await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'invalid_password');
         await this.addConstantTimeDelay(startTime);
         throw new UnauthorizedException('Invalid credentials');
       }
 
       // Successful login - clear failed attempts
-      await this.clearFailedAttempts(email, ipAddress);
+      await this.rateLimitCache.clearFailedAttempts(email, ipAddress);
 
       const payload = {
         email: user.email,
@@ -575,7 +580,7 @@ export class AuthService {
    */
   private async checkIpRateLimit(ipAddress: string): Promise<void> {
     const attempts =
-      await this.rateLimitCacheService.incrementEmailAttempts(ipAddress);
+      await this.rateLimitCache.incrementEmailAttempts(ipAddress);
 
     // Allow 10 attempts per IP per hour
     if (attempts >= 3) {
@@ -598,126 +603,6 @@ export class AuthService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-  }
-
-  /**
-   * Check email-based rate limiting
-   * Prevents targeted attacks on specific accounts
-   */
-  private async checkEmailRateLimit(email: string): Promise<void> {
-    const attempts =
-      await this.rateLimitCacheService.incrementEmailAttempts(email);
-
-    // Allow 5 attempts per email per 15 minutes
-    if (attempts >= 5) {
-      this.logger.warn(`Email rate limit exceeded: ${email}`);
-
-      Sentry.captureMessage('Email rate limit exceeded on login', {
-        level: 'warning',
-        tags: {
-          operation: 'sign_in',
-          rate_limit_type: 'email',
-        },
-        extra: {
-          email,
-          attempts,
-        },
-      });
-
-      throw new HttpException(
-        'Too many login attempts for this account. Please try again later or reset your password.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-  }
-
-  /**
-   * Check if account is locked due to failed attempts
-   * Implements progressive lockout
-   */
-  private async isAccountLocked(email: string): Promise<boolean> {
-    return await this.rateLimitCacheService.isAccountLocked(email);
-  }
-
-  /**
-   * Handle failed login attempts with progressive lockout
-   */
-  private async handleFailedLogin(
-    email: string,
-    ipAddress: string,
-    reason: string,
-  ): Promise<void> {
-    const newAttempts =
-      await this.rateLimitCacheService.incrementFailedAttempts(email);
-
-    // Log failed attempt
-    this.logger.warn(
-      `Failed login attempt ${newAttempts} for ${email} from ${ipAddress}. Reason: ${reason}`,
-    );
-
-    // Progressive lockout strategy
-    if (newAttempts >= 10) {
-      const lockDuration = 3600 * 1000;
-      await this.rateLimitCacheService.lockAccount(
-        email,
-        newAttempts,
-        lockDuration,
-      );
-
-      Sentry.captureMessage('Account locked - excessive failed attempts', {
-        level: 'error',
-        tags: {
-          operation: 'sign_in',
-          security_event: 'account_locked',
-        },
-        extra: {
-          email,
-          ipAddress,
-          attempts: newAttempts,
-          lockDuration: '1 hour',
-        },
-      });
-    } else if (newAttempts >= 7) {
-      // 7-9 attempts: Lock for 15 minutes
-      const lockDuration = 900 * 1000;
-      await this.rateLimitCacheService.lockAccount(
-        email,
-        newAttempts,
-        lockDuration,
-      );
-    } else if (newAttempts >= 5) {
-      // 5-6 attempts: Lock for 5 minutes
-      const lockDuration = 300 * 1000;
-      await this.rateLimitCacheService.lockAccount(
-        email,
-        newAttempts,
-        lockDuration,
-      );
-
-      Sentry.captureMessage('Account temporarily locked', {
-        level: 'warning',
-        tags: {
-          operation: 'sign_in',
-          security_event: 'temp_lock',
-        },
-        extra: {
-          email,
-          ipAddress,
-          attempts: newAttempts,
-        },
-      });
-    }
-  }
-
-  /**
-   * Clear failed login attempts on successful login
-   */
-  private async clearFailedAttempts(
-    email: string,
-    ipAddress: string,
-  ): Promise<void> {
-    await this.rateLimitCacheService.clearFailedAttempts(email);
-    this.logger.log(`Cleared failed attempts for ${email}`);
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -794,7 +679,7 @@ export class AuthService {
     try {
       // 1. Rate limit by IP (global)
       const ipAttempts =
-        await this.rateLimitCacheService.incrementPasswordResetIpAttempts(
+        await this.rateLimitCache.incrementPasswordResetIpAttempts(
           ipAddress,
         );
 
@@ -814,7 +699,7 @@ export class AuthService {
 
       // 2. Rate limit by email
       const emailAttempts =
-        await this.rateLimitCacheService.incrementPasswordResetEmailAttempts(
+        await this.rateLimitCache.incrementPasswordResetEmailAttempts(
           email,
         );
       const emailRateLimited = emailAttempts > 3;
