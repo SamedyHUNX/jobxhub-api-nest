@@ -20,11 +20,17 @@ export class RateLimitCacheService {
   // IP Rate Limiting
   // ============================================================================
 
-  async getIpAttempts(ipAddress: string): Promise<number> {
+  async getIpAttempts(
+    ipAddress: string,
+    action: string = 'signin',
+  ): Promise<number> {
+    const key = `${action}_ip:${ipAddress}`;
     try {
-      return (await this.cache.get<number>(`login_ip:${ipAddress}`)) || 0;
+      return (await this.cache.get<number>(key)) || 0;
     } catch (error) {
-      this.logger.error(`Failed to get IP attempts: ${error.message}`);
+      this.logger.error(
+        `Failed to get ${action} IP attempts: ${error.message}`,
+      );
       return 0;
     }
   }
@@ -32,16 +38,19 @@ export class RateLimitCacheService {
   async incrementIpAttempts(
     ipAddress: string,
     ttlMs: number = 3600 * 1000,
+    action: string = 'login',
   ): Promise<number> {
-    const key = `login_ip:${ipAddress}`;
-    const current = await this.getIpAttempts(ipAddress);
+    const key = `${action}_ip:${ipAddress}`;
+    const current = await this.getIpAttempts(ipAddress, action);
     const newCount = current + 1;
 
     try {
       await this.cache.set(key, newCount, ttlMs);
       return newCount;
     } catch (error) {
-      this.logger.error(`Failed to increment IP attempts: ${error.message}`);
+      this.logger.error(
+        `Failed to increment ${action} IP attempts: ${error.message}`,
+      );
       return newCount;
     }
   }
