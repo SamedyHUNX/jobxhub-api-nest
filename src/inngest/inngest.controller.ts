@@ -1,4 +1,4 @@
-import { All, Controller, Module, Req, Res } from '@nestjs/common';
+import { All, Controller, Req, Res } from '@nestjs/common';
 import { serve } from 'inngest/express';
 import { UserFunctionsService } from './functions/functions.service';
 import { InngestClientService } from './services/inngest.service';
@@ -8,7 +8,7 @@ export class InngestController {
   constructor(
     private inngestClientService: InngestClientService,
     private userFunctionsService: UserFunctionsService,
-  ) {}
+  ) { }
 
   @All()
   handleInngest(@Req() req, @Res() res) {

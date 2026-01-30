@@ -4,16 +4,16 @@ import { UsersService } from './users.service';
 import { S3Module } from '@/s3/s3.module';
 import { PassportModule } from '@nestjs/passport';
 import { InngestModule } from '@/inngest/inngest.module';
-import { AppConfigModule } from '@/config/config.module';
 import { JwtModule } from '@nestjs/jwt';
-import { ConfigService } from '@/config/config.service';
+import { ConfigService } from '@/common/services/config.service';
+import { CommonModule } from '@/common/common.module';
 
 @Module({
   imports: [
     S3Module,
     PassportModule,
     InngestModule,
-    AppConfigModule,
+    CommonModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
@@ -30,4 +30,4 @@ import { ConfigService } from '@/config/config.service';
   controllers: [UsersController],
   providers: [UsersService],
 })
-export class UsersModule {}
+export class UsersModule { }

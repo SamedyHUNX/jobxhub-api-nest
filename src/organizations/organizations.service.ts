@@ -1,4 +1,4 @@
-import { ConfigService } from '@/config/config.service';
+import { ConfigService } from '@/common/services/config.service';
 import { DrizzleService } from '@/drizzle/services/drizzle.service';
 import { S3Service } from '@/s3/services/s3.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -32,7 +32,7 @@ export class OrganizationsService {
     private s3Service: S3Service,
     private readonly configService: ConfigService,
     private inngestHealth: InngestHealthService,
-  ) {}
+  ) { }
 
   private get redisCache() {
     if (!this.cacheManager) {

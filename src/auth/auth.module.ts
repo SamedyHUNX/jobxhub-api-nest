@@ -6,8 +6,7 @@ import { S3Module } from '@/s3/s3.module';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt/jwt.strategy';
 import { InngestModule } from '@/inngest/inngest.module';
-import { ConfigService } from '@/config/config.service';
-import { AppConfigModule } from '@/config/config.module';
+import { ConfigService } from '@/common/services/config.service';
 import { CacheModule } from '@/cache/cache.module';
 import { CommonModule } from '@/common/common.module';
 
@@ -16,7 +15,6 @@ import { CommonModule } from '@/common/common.module';
     S3Module,
     PassportModule,
     InngestModule,
-    AppConfigModule,
     CacheModule,
     CommonModule,
     JwtModule.registerAsync({
@@ -35,4 +33,4 @@ import { CommonModule } from '@/common/common.module';
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
 })
-export class AuthModule {}
+export class AuthModule { }

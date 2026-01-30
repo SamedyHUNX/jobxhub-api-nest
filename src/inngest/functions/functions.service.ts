@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EmailService } from '@/email/email.service';
+import { EmailService } from '@/common/services/email.service';
 import { InngestHealthService } from '../services/inngest-health.service';
 
 @Injectable()

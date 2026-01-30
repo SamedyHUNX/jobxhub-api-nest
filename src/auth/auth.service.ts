@@ -14,7 +14,7 @@ import { and, eq, gt, or } from 'drizzle-orm';
 import { capitalizeString } from '@/utils/helpers';
 import * as crypto from 'crypto';
 import { UserTable } from '@/drizzle/schema';
-import { ConfigService } from '@/config/config.service';
+import { ConfigService } from '@/common/services/config.service';
 import * as Sentry from '@sentry/nestjs';
 import { UserCacheService } from '@/cache/services/user-cache.service';
 import { RateLimitCacheService } from '@/cache/services/rate-limit-cache.service';
@@ -35,7 +35,7 @@ export class AuthService {
     private rateLimitCacheService: RateLimitCacheService,
     private inngestHealth: InngestHealthService,
     private dbHealth: DrizzleHealthService,
-  ) {}
+  ) { }
 
   private get inngest() {
     return this.inngestHealth.getInngest();

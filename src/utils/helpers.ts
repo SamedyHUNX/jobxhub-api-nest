@@ -1,5 +1,4 @@
 import { uuid, timestamp } from 'drizzle-orm/pg-core';
-import bcrypt from 'bcrypt';
 
 export const idCol = () => uuid().primaryKey().defaultRandom();
 
@@ -17,12 +16,6 @@ export function capitalizeString(str: string): string {
     return '';
   }
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-}
-
-export async function hashPassword(password: string): Promise<string> {
-  const saltRounds = Number(process.env.SALT) || 10;
-  const salt = await bcrypt.genSalt(saltRounds);
-  return bcrypt.hash(password, salt);
 }
 
 export function sanitizedEmail(email: string): string {

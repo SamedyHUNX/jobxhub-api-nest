@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 import { InngestController } from './inngest.controller';
-import { AppConfigModule } from '@/config/config.module';
 import { UserFunctionsService } from './functions/functions.service';
-import { EmailService } from '@/email/email.service';
+import { EmailService } from '@/common/services/email.service';
 import { InngestClientService } from './services/inngest.service';
 import { InngestHealthService } from './services/inngest-health.service';
+import { CommonModule } from '@/common/common.module';
 
 @Module({
-  imports: [AppConfigModule],
+  imports: [CommonModule],
   exports: [InngestClientService, InngestHealthService],
   controllers: [InngestController],
   providers: [
@@ -17,4 +17,4 @@ import { InngestHealthService } from './services/inngest-health.service';
     InngestHealthService,
   ],
 })
-export class InngestModule {}
+export class InngestModule { }

@@ -2,14 +2,14 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Pool } from 'pg';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../schema';
-import { ConfigService } from '@/config/config.service';
+import { ConfigService } from '@/common/services/config.service';
 
 @Injectable()
 export class DrizzleService implements OnModuleInit, OnModuleDestroy {
   public db: NodePgDatabase<typeof schema>;
   private pool: Pool;
 
-  constructor(private configService: ConfigService) {}
+  constructor(private configService: ConfigService) { }
 
   async onModuleInit() {
     const sslEnabled = process.env.DB_SSL === 'true';
