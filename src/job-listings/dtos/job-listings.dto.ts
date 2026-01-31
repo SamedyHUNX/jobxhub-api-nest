@@ -40,9 +40,8 @@ export class CreateJobListingDto {
   @MaxLength(5000)
   description: string;
 
-  @IsNumber()
   @IsOptional()
-  wage?: number;
+  wage?: string;
 
   @IsEnum(wageIntervals)
   @IsOptional()

@@ -2,13 +2,13 @@ import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service'
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateJobListingDto } from './dtos/job-listings.dto';
 import { JobListingTable, OrganizationTable } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, like, or } from 'drizzle-orm';
 
 @Injectable()
 export class JobListingsService {
   private readonly logger = new Logger(JobListingsService.name);
 
-  constructor(private dbHealth: DrizzleHealthService) {}
+  constructor(private dbHealth: DrizzleHealthService) { }
 
   private get db() {
     return this.dbHealth.getDb();
@@ -35,7 +35,7 @@ export class JobListingsService {
         organizationId,
         status: data.status || 'draft',
         isFeatured: data.isFeatured || false,
-        postedAt: data.postedAt ? new Date(data.postedAt) : null,
+        postedAt: data.postedAt ? new Date(data.postedAt) : new Date(),
       })
       .returning();
 
@@ -50,4 +50,53 @@ export class JobListingsService {
       },
     };
   };
+
+  // Get all job listings with optional filtering
+  findAll = async (search?: string, organizationId?: string, status?: string, type?: string, locationRequirement?: string, experienceLevel?: string) => {
+    const baseQuery = this.db
+      .select()
+      .from(JobListingTable)
+      .leftJoin(
+        OrganizationTable,
+        eq(JobListingTable.organizationId, OrganizationTable.id),
+      );
+
+    const conditions: any[] = [];
+
+    if (search) {
+      const searchCondition = or(
+        like(JobListingTable.title, `%${search}%`),
+        like(JobListingTable.description, `%${search}%`),
+      );
+      if (searchCondition) conditions.push(searchCondition);
+    }
+    if (organizationId) {
+      conditions.push(eq(JobListingTable.organizationId, organizationId));
+    }
+    if (status) {
+      conditions.push(eq(JobListingTable.status, status as any));
+    }
+    if (type) {
+      conditions.push(eq(JobListingTable.type, type as any));
+    }
+    if (locationRequirement) {
+      conditions.push(
+        eq(JobListingTable.locationRequirement, locationRequirement as any),
+      );
+    }
+    if (experienceLevel) {
+      conditions.push(
+        eq(JobListingTable.experienceLevel, experienceLevel as any),
+      );
+    }
+
+    const jobListings =
+      conditions.length > 0
+        ? await baseQuery.where(and(...conditions))
+        : await baseQuery;
+
+    return {
+      jobListings,
+    };
+  }
 }

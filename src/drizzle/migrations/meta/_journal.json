@@ -50,6 +50,20 @@
       "when": 1769584077900,
       "tag": "0006_new_otto_octavius",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1769846116083,
+      "tag": "0007_freezing_korg",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1769846170993,
+      "tag": "0008_cultured_blade",
+      "breakpoints": true
     }
   ]
 }

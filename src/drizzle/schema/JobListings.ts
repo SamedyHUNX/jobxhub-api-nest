@@ -1,12 +1,6 @@
 import { createdAtCol, idCol, updatedAtCol } from '@/utils/helpers';
-import { uuid } from 'drizzle-orm/pg-core';
-import { pgTable } from 'drizzle-orm/pg-core';
+import { numeric, uuid, pgTable, varchar, boolean, timestamp, text } from 'drizzle-orm/pg-core';
 import { OrganizationTable } from './Organizations';
-import { varchar } from 'drizzle-orm/pg-core';
-import { text } from 'drizzle-orm/pg-core';
-import { integer } from 'drizzle-orm/pg-core';
-import { boolean } from 'drizzle-orm/pg-core';
-import { timestamp } from 'drizzle-orm/pg-core';
 import {
   experienceLevelEnum,
   jobListingStatusEnum,
@@ -19,7 +13,7 @@ import { relations } from 'drizzle-orm';
 import { JobListingApplicationTable } from './JobListingApplication';
 
 export const JobListingTable = pgTable(
-  'job-listings',
+  'job_listings',
   {
     id: idCol(),
     organizationId: uuid('organization_id')
@@ -29,7 +23,7 @@ export const JobListingTable = pgTable(
       .notNull(),
     title: varchar().notNull(),
     description: text().notNull(),
-    wage: integer(),
+    wage: numeric(),
     wageInterval: wageIntervalEnum('wage_interval'),
     stateAbbreviation: varchar('state_abbreviation'),
     city: varchar(),
