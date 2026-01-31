@@ -11,7 +11,7 @@ import {
 import { JobListingsService } from './job-listings.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { CreateJobListingDto } from './dtos/job-listings.dto';
-import { CurrentUser } from '@/auth/decorators/current-user.decorator';
+import { CurrentUser } from '@/decorators/current-user.decorator';
 
 @Controller('job-listings')
 export class JobListingsController {

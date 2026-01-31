@@ -10,7 +10,7 @@ import {
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { UpdatedMeDataDto } from './dtos/update-me.dto';
-import { CurrentUser } from '@/auth/decorators/current-user.decorator';
+import { CurrentUser } from '@/decorators/current-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';

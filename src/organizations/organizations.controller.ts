@@ -17,13 +17,14 @@ import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MulterExceptionFilter } from '@/utils/multer-global-handling';
 import { CreateOrganizationDto } from './dtos/organizations.dto';
-import { CurrentUser } from '@/auth/decorators/current-user.decorator';
+import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { IdValidationPipe } from '@/utils/image-validation-pipe';
+import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
 
 @Controller('organizations')
 export class OrganizationsController {
-  constructor(private readonly orgsService: OrganizationsService) {}
+  constructor(private readonly orgsService: OrganizationsService) { }
 
   // Create a new organization: POST /organizations
   @Post('/create')
@@ -48,7 +49,11 @@ export class OrganizationsController {
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: any,
   ) {
-    return this.orgsService.create(createOrganizationDto, file, user.id);
+    await this.orgsService.create(createOrganizationDto, file, user.id);
+
+    return {
+      message: 'Organization created successfully',
+    };
   }
 
   // Get all organizations with optional filtering: GET /organizations?search=name&isVerified=true
@@ -59,18 +64,48 @@ export class OrganizationsController {
   ) {
     const isVerifiedBool =
       isVerified === 'true' ? true : isVerified === 'false' ? false : undefined;
-    return this.orgsService.findAll(search, isVerifiedBool);
+    const orgs = await this.orgsService.findAll(search, isVerifiedBool);
+
+    return {
+      data: {
+        orgs
+      },
+    };
   }
 
   // Get organizations by user ID: GET /organizations/user/:userId
   @Get('user/:userId')
   async findByUser(@Param('userId', IdValidationPipe) userId: string) {
-    return this.orgsService.findByUser(userId);
+    const orgs = await this.orgsService.findByUser(userId);
+
+    return {
+      data: {
+        orgs,
+      },
+    };
   }
 
-  //Get a single organization by ID: GET /organizations/:id
+  // Get selected organization by ID: GET /organizations/selected
+  @Get('org/selected')
+  async findSelected(@SelectedOrgId() orgId: string) {
+    const org = await this.orgsService.findSelected(orgId);
+
+    return {
+      data: {
+        orgs: org,
+      },
+    };
+  }
+
+  // Get a single organization by ID: GET /organizations/:id
   @Get('org/:id')
   async findOne(@Param('id', IdValidationPipe) id: string) {
-    return this.orgsService.findOne(id);
+    const org = await this.orgsService.findOne(id);
+
+    return {
+      data: {
+        orgs: org,
+      },
+    };
   }
 }

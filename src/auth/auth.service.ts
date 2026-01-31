@@ -22,6 +22,7 @@ import { InngestHealthService } from '@/inngest/services/inngest-health.service'
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { HashingService } from '@/common/services/hashing.service';
+import { User } from '@/types';
 
 @Injectable()
 export class AuthService {
@@ -215,7 +216,7 @@ export class AuthService {
             password: hashedPassword,
             phoneNumber,
             imageUrl,
-            userRole: 'USER',
+            userRole: 'USER', // For security
             verificationToken: hashedVerificationToken,
             verificationExpires: verificationExpires,
           })
@@ -237,19 +238,26 @@ export class AuthService {
       }
 
       try {
-        await this.inngest.send({
+        this.logger.log(`Sending Inngest event for user signup: ${user.email} (${user.id})`);
+        const eventData = {
+          userId: user.id,
+          email: user.email,
+          name: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          imageUrl: user.imageUrl,
+          verificationUrl,
+          acceptLanguage: locale,
+        };
+        this.logger.debug(`Inngest event data: ${JSON.stringify(eventData, null, 2)}`);
+        
+        const result = await this.inngest.send({
           name: 'jobxhub/user.created',
-          data: {
-            userId: user.id,
-            email: user.email,
-            name: user.username,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            imageUrl: user.imageUrl,
-            verificationUrl,
-            acceptLanguage: locale,
-          },
+          data: eventData,
         });
+        
+        this.logger.log(`Inngest event sent successfully for user: ${user.email} (${user.id})`);
+        this.logger.debug(`Inngest send result: ${JSON.stringify(result, null, 2)}`);
       } catch (inngestError: any) {
         // Rollback: Delete the user we just created
         await this.db.delete(UserTable).where(eq(UserTable.id, user.id));
@@ -257,17 +265,27 @@ export class AuthService {
         // Delete the uploaded image
         await this.s3.deleteFile(imageKey);
 
+        const errorMessage = inngestError?.message || inngestError?.toString() || 'Unknown error';
+        const errorStack = inngestError?.stack || 'No stack trace available';
+
+        this.logger.error(
+          `Failed to emit user.created event for user: ${user.email} (${user.id})`,
+          errorStack,
+        );
+
         Sentry.captureException(inngestError, {
+          tags: {
+            operation: 'signup_inngest_failed',
+          },
           extra: {
             userId: user.id,
             email: user.email,
             context: 'signup_inngest_failed',
+            errorMessage,
+            errorStack,
           },
         });
 
-        this.logger.error(
-          `Failed to emit user.created event: ${inngestError?.message ?? inngestError}`,
-        );
         throw new InternalServerErrorException(
           'Failed to complete signup. Please try again',
         );
@@ -381,9 +399,7 @@ export class AuthService {
         );
       }
 
-      return {
-        message: 'Email verified successfully',
-      };
+      return
     } catch (error) {
       Sentry.captureException(error, {
         extra: {
@@ -406,7 +422,10 @@ export class AuthService {
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   // Sign In
-  async signIn(data: SignInDto, ipAddress: string) {
+  async signIn(data: SignInDto, ipAddress: string, user: User) {
+    if (user) {
+      throw new UnauthorizedException('User already signed in');
+    }
     const { email, password } = data;
     const startTime = Date.now();
 
@@ -439,6 +458,7 @@ export class AuthService {
       let passwordHash: string;
 
       if (cachedUser) {
+        // Get user from cache
         user = cachedUser;
 
         const [dbStatus] = await this.db
@@ -541,9 +561,7 @@ export class AuthService {
 
       await this.addConstantTimeDelay(startTime);
 
-      return {
-        token,
-      };
+      return token
     } catch (error) {
       // Capture security-related errors in Sentry
       if (error instanceof UnauthorizedException) {

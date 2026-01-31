@@ -23,7 +23,7 @@ import {
 } from './dtos/auth.dto';
 import { ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { JwtAuthGuard } from './jwt/jwt.guard';
-import { CurrentUser } from './decorators/current-user.decorator';
+import { CurrentUser } from '../decorators/current-user.decorator';
 import { plainToInstance } from 'class-transformer';
 import { UserResponseDto } from '@/users/dtos/user-response.dto';
 import type { Response } from 'express';
@@ -36,6 +36,7 @@ export class AuthController {
 
   // Sign Up (/api/auth/signup)
   @Post('sign-up')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Create a user' })
   @ApiResponse({ status: 200, description: 'Create a user' })
   @UseInterceptors(
@@ -43,32 +44,43 @@ export class AuthController {
       limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )
-  signUp(
+  async signUp(
     @Body() data: SignUpDto,
     @UploadedFile(new ImageValidationPipe()) image: Express.Multer.File,
     @Headers('accept-language') acceptLanguage: string,
+    @Res() res: Response,
   ) {
-    return this.authService.signUp(data, image, acceptLanguage);
+    const result = await this.authService.signUp(data, image, acceptLanguage);
+    return res.status(200).json(result);
   }
+
 
   // Verify Email (/api/auth/verify-email)
   @ApiOperation({ summary: 'Verify email' })
-  @ApiResponse({ status: 200, description: 'Verify email' })
+  @ApiResponse({ status: 201, description: 'Verify email' })
+  @HttpCode(201)
   @Post('verify-email')
-  verifyEmail(@Body('token') token: string) {
-    return this.authService.verifyEmail(token);
+  async verifyEmail(@Body('token') token: string, @Res() res: Response) {
+    try {
+      await this.authService.verifyEmail(token);
+      return res.status(201).send();
+    } catch (error) {
+      throw error;
+    }
   }
 
   // Sign In (/api/auth/signin)
   @ApiOperation({ summary: 'Sign in' })
   @ApiResponse({ status: 200, description: 'Sign in' })
+  @HttpCode(200)
   @Post('sign-in')
   async signIn(
     @Body() data: SignInDto,
     @Res() res: Response,
     @Ip() ipAddress: string,
+    @CurrentUser() user: any,
   ) {
-    const { token } = await this.authService.signIn(data, ipAddress);
+    const token = await this.authService.signIn(data, ipAddress, user);
 
     // Set HttpOnly Secure SameSite cookie
     res.cookie('access_token', token, {

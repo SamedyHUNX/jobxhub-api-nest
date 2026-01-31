@@ -1,21 +1,66 @@
 import { ConfigService } from '@/common/services/config.service';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import * as Sentry from '@sentry/nestjs';
 
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
   private transporter;
 
   constructor(private readonly configService: ConfigService) {
-    this.transporter = nodemailer.createTransport({
+    const smtpPort = this.configService.smtpPort;
+    // Port 465 typically uses SSL (secure: true), port 587 uses STARTTLS (secure: false, requireTLS: true)
+    const isSecurePort = smtpPort === 465;
+    
+    const smtpConfig: any = {
       host: this.configService.smtpHost,
-      port: this.configService.smtpPort,
-      secure: false,
+      port: smtpPort,
+      secure: isSecurePort, // true for 465, false for other ports
       auth: {
         user: this.configService.smtpUser,
         pass: this.configService.smtpPass,
       },
+    };
+
+    // For non-secure ports (like 587), require TLS
+    if (!isSecurePort) {
+      smtpConfig.requireTLS = true;
+      smtpConfig.tls = {
+        rejectUnauthorized: false, // Allow self-signed certificates
+      };
+    }
+
+    this.logger.log(
+      `Initializing SMTP transporter with host: ${smtpConfig.host}, port: ${smtpConfig.port}, secure: ${smtpConfig.secure}, user: ${smtpConfig.auth.user}`,
+    );
+
+    this.transporter = nodemailer.createTransport(smtpConfig);
+
+    // Verify SMTP connection on initialization (fire and forget)
+    this.verifyConnection().catch((error) => {
+      this.logger.warn(`Initial SMTP verification failed, but service will continue: ${error?.message}`);
     });
+  }
+
+  private async verifyConnection() {
+    try {
+      this.logger.log('Verifying SMTP connection...');
+      await this.transporter.verify();
+      this.logger.log('SMTP connection verified successfully');
+    } catch (error: any) {
+      this.logger.error(`SMTP connection verification failed: ${error?.message}`, error?.stack);
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'smtp_verification',
+        },
+        extra: {
+          errorMessage: error?.message,
+          smtpHost: this.configService.smtpHost,
+          smtpPort: this.configService.smtpPort,
+        },
+      });
+    }
   }
 
   async sendVerificationEmail(
@@ -84,7 +129,50 @@ export class EmailService {
       `,
     };
 
-    await this.transporter.sendMail(mailOptions);
+    try {
+      this.logger.log(`Sending verification email to: ${to}`);
+      this.logger.debug(`Email from: ${mailOptions.from}, subject: ${mailOptions.subject}`);
+      
+      // Verify connection before sending
+      try {
+        await this.transporter.verify();
+      } catch (verifyError: any) {
+        this.logger.warn(`SMTP connection check failed before sending: ${verifyError?.message}`);
+      }
+
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Verification email sent successfully to: ${to}. MessageId: ${result.messageId}`);
+      this.logger.debug(`Email response: ${JSON.stringify(result.response)}`);
+      return result;
+    } catch (error: any) {
+      const errorDetails = {
+        message: error?.message,
+        code: error?.code,
+        command: error?.command,
+        response: error?.response,
+        responseCode: error?.responseCode,
+        stack: error?.stack,
+      };
+      
+      this.logger.error(
+        `Failed to send verification email to: ${to}. Error: ${error?.message}`,
+        error?.stack || error,
+      );
+      this.logger.error(`Email error details: ${JSON.stringify(errorDetails, null, 2)}`);
+      
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'send_verification_email',
+        },
+        extra: {
+          to,
+          acceptLanguage,
+          from: mailOptions.from,
+          errorDetails,
+        },
+      });
+      throw error;
+    }
   }
 
   async sendWelcomeEmail(to: string, name: string, acceptLanguage: string) {
@@ -131,7 +219,26 @@ export class EmailService {
     `,
     };
 
-    await this.transporter.sendMail(mailOptions);
+    try {
+      this.logger.log(`Sending welcome email to: ${to}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Welcome email sent successfully to: ${to}. MessageId: ${result.messageId}`);
+      return result;
+    } catch (error: any) {
+      this.logger.error(`Failed to send welcome email to: ${to}`, error?.stack || error);
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'send_welcome_email',
+        },
+        extra: {
+          to,
+          name,
+          acceptLanguage,
+          errorMessage: error?.message,
+        },
+      });
+      throw error;
+    }
   }
 
   async sendPasswordResetEmail(
@@ -203,6 +310,45 @@ export class EmailService {
       `,
     };
 
-    await this.transporter.sendMail(mailOptions);
+    try {
+      this.logger.log(`Sending password reset email to: ${to}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Password reset email sent successfully to: ${to}. MessageId: ${result.messageId}`);
+      return result;
+    } catch (error: any) {
+      this.logger.error(`Failed to send password reset email to: ${to}`, error?.stack || error);
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'send_password_reset_email',
+        },
+        extra: {
+          to,
+          acceptLanguage,
+          errorMessage: error?.message,
+        },
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Test method to verify email service is working
+   * This can be called to diagnose email sending issues
+   */
+  async testEmailConnection() {
+    try {
+      this.logger.log('Testing SMTP connection...');
+      const verified = await this.transporter.verify();
+      this.logger.log('SMTP connection test passed');
+      return { success: true, verified };
+    } catch (error: any) {
+      this.logger.error(`SMTP connection test failed: ${error?.message}`, error?.stack);
+      return {
+        success: false,
+        error: error?.message,
+        code: error?.code,
+        command: error?.command,
+      };
+    }
   }
 }

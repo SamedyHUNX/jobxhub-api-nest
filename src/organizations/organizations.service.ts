@@ -205,12 +205,7 @@ export class OrganizationsService {
         `Organization created with ID: ${organization.id} and assigned to user: ${userId}`,
       );
 
-      return {
-        message: 'Organization created successfully',
-        data: {
-          organizations: organization,
-        },
-      };
+      return organization
     } catch (error) {
       // Final cleanup for any uncaught errors
       this.logger.warn(`Operation failed. Deleting orphaned file: ${imageKey}`);
@@ -259,12 +254,7 @@ export class OrganizationsService {
     // Extract only the organization data from the join result
     const organizations = orgs.map((item) => item.organizations);
 
-    return {
-      message: 'Organizations fetched successfully',
-      data: {
-        organizations,
-      },
-    };
+    return organizations
   };
 
   // Get a single organization by ID
@@ -287,11 +277,29 @@ export class OrganizationsService {
       );
     }
 
-    return {
-      message: 'Organizations fetched successfully',
-      data: {
-        organizations: org,
-      },
-    };
+    return org
+  };
+
+  // Get selected organization by ID
+  findSelected = async (orgId: string) => {
+    if (!orgId) {
+      this.logger.error('Missing orgId');
+      throw new BadRequestException('No orgId provided');
+    }
+
+    const [org] = await this.dbServer
+      .select()
+      .from(OrganizationTable)
+      .where(eq(OrganizationTable.id, orgId))
+      .limit(1);
+
+    if (!org) {
+      this.logger.error(`Organization with ID ${orgId} not found`);
+      throw new NotFoundException(
+        'No organizations found. Please consider creating one',
+      );
+    }
+
+    return org
   };
 }
