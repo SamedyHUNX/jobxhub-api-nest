@@ -141,12 +141,7 @@ export class UsersService {
 
       this.logger.log(`User ${userId} updated their profile`);
 
-      return {
-        message: 'Updated user successfully',
-        data: {
-          users: userWithoutPassword,
-        },
-      };
+      return userWithoutPassword;
     } catch (error) {
       // Cleanup uploaded image if something went wrong
       if (uploadedImageKey) {

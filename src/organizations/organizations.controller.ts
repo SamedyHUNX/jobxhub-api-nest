@@ -4,9 +4,11 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseFilters,
   UseGuards,
@@ -27,7 +29,7 @@ export class OrganizationsController {
   constructor(private readonly orgsService: OrganizationsService) { }
 
   // Create a new organization: POST /organizations
-  @Post('/create')
+  @Post()
   @ApiOperation({ summary: 'Create an organization' })
   @ApiResponse({ status: 200, description: 'Create an organization' })
   @UseGuards(JwtAuthGuard)
@@ -52,7 +54,9 @@ export class OrganizationsController {
     await this.orgsService.create(createOrganizationDto, file, user.id);
 
     return {
+      statusCode: 201,
       message: 'Organization created successfully',
+      data: []
     };
   }
 
@@ -61,16 +65,26 @@ export class OrganizationsController {
   async findAll(
     @Query('search') search?: string,
     @Query('isVerified') isVerified?: string,
+    @Query('userId') userId?: string
   ) {
     const isVerifiedBool =
       isVerified === 'true' ? true : isVerified === 'false' ? false : undefined;
-    const orgs = await this.orgsService.findAll(search, isVerifiedBool);
 
-    return {
-      data: {
-        orgs
-      },
-    };
+    try {
+      const allOrganizations = await this.orgsService.findAll(search, isVerifiedBool, userId);
+
+      if (!allOrganizations) {
+        throw new NotFoundException('Organizations not found');
+      }
+
+      return {
+        message: 'Organizations fetched successfully',
+        data: allOrganizations,
+        statusCode: 200
+      };
+    } catch (error) {
+      throw error
+    }
   }
 
   // Get organizations by user ID: GET /organizations/user/:userId

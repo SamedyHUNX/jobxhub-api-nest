@@ -291,9 +291,7 @@ export class AuthService {
         );
       }
 
-      return {
-        message: 'User signed up successfully. Please verify your email.',
-      };
+      return true
     } catch (error) {
       // Cleanup orphaned file
       this.logger.warn(
@@ -399,7 +397,7 @@ export class AuthService {
         );
       }
 
-      return
+      return true
     } catch (error) {
       Sentry.captureException(error, {
         extra: {
@@ -799,9 +797,7 @@ export class AuthService {
       await this.addConstantTimeDelay(startTime);
 
       // Always return same response
-      return {
-        message: 'Password reset email sent. Please check your inbox',
-      };
+      return true
     } catch (error) {
       // Capture unexpected errors in Sentry
       if (!(error instanceof HttpException)) {
@@ -876,9 +872,7 @@ export class AuthService {
     await this.invalidateAllUserSessions(user.id);
 
     this.logger.log(`Password successfully reset for user ID: ${user.id}`);
-    return {
-      message: 'Password reset successfully',
-    };
+    return true
   };
 
   async signOut(userId: string) {

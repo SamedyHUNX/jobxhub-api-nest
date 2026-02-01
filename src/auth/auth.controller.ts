@@ -50,20 +50,44 @@ export class AuthController {
     @Headers('accept-language') acceptLanguage: string,
     @Res() res: Response,
   ) {
-    const result = await this.authService.signUp(data, image, acceptLanguage);
-    return res.status(200).json(result);
+    const success = await this.authService.signUp(data, image, acceptLanguage);
+    if (success) {
+      return res.json({
+        statusCode: 200,
+        message: 'User signed up successfully. Please verify your email.',
+        data: [],
+      });
+    }
+
+    return res.json({
+      statusCode: 400,
+      message: 'User sign up failed',
+      data: [],
+    });
   }
 
 
   // Verify Email (/api/auth/verify-email)
   @ApiOperation({ summary: 'Verify email' })
-  @ApiResponse({ status: 201, description: 'Verify email' })
+  @ApiResponse({ status: 200, description: 'Verify email' })
   @HttpCode(201)
   @Post('verify-email')
   async verifyEmail(@Body('token') token: string, @Res() res: Response) {
     try {
-      await this.authService.verifyEmail(token);
-      return res.status(201).send();
+      const success = await this.authService.verifyEmail(token);
+      if (success) {
+        return res.json({
+          statusCode: 200,
+          message: 'Email verified successfully',
+          data: [],
+        });
+      }
+
+      return res.json({
+        statusCode: 400,
+        message: 'Email verification failed',
+        data: [],
+      });
     } catch (error) {
       throw error;
     }
@@ -80,23 +104,33 @@ export class AuthController {
     @Ip() ipAddress: string,
     @CurrentUser() user: any,
   ) {
-    const token = await this.authService.signIn(data, ipAddress, user);
+    try {
+      const token = await this.authService.signIn(data, ipAddress, user);
+      if (!token) {
+        return res.json({
+          statusCode: 400,
+          message: 'User sign in failed',
+          data: [],
+        });
+      }
+      // Set HttpOnly Secure SameSite cookie
+      res.cookie('access_token', token, {
+        httpOnly: true, // Not accessible via JavaScript
+        secure: process.env.NODE_ENV === 'production', // Only sent over HTTPS
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Sent with cross-site requests
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/', // Available across the entire site
+      });
 
-    // Set HttpOnly Secure SameSite cookie
-    res.cookie('access_token', token, {
-      httpOnly: true, // Not accessible via JavaScript
-      secure: process.env.NODE_ENV === 'production', // Only sent over HTTPS
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Sent with cross-site requests
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/', // Available across the entire site
-    });
-
-    // Return user info without exposing token
-    return res.json({
-      status: 'success',
-      message: 'Signed in successfully',
-      code: 200,
-    });
+      // Return user info without exposing token
+      return res.json({
+        message: 'Signed in successfully',
+        data: [], // get data from getMe
+        statusCode: 200,
+      })
+    } catch (error) {
+      throw error;
+    }
   }
 
   // Get current user (/api/auth/me)
@@ -106,10 +140,25 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   getMe(@CurrentUser() user: any) {
-    return plainToInstance(UserResponseDto, user, {
+    const userData = plainToInstance(UserResponseDto, user, {
       excludeExtraneousValues: true,
     });
+
+    if (!userData) {
+      return {
+        statusCode: 404,
+        message: 'User not found',
+        data: [],
+      };
+    }
+
+    return {
+      statusCode: 200,
+      message: 'User fetched successfully',
+      data: [userData],
+    };
   }
+
 
   // POST forgot-password
   @ApiOperation({ summary: 'Forgot password' })
@@ -120,8 +169,25 @@ export class AuthController {
     @Body() { email }: RequestPasswordResetDto,
     @Headers('accept-language') acceptLanguage: string,
     @Ip() ipAddress: string,
+    @Res() res: Response,
   ) {
-    return this.authService.forgotPassword(email, acceptLanguage, ipAddress);
+    try {
+      const success = this.authService.forgotPassword(email, acceptLanguage, ipAddress);
+      if (!success) {
+        return res.json({
+          statusCode: 400,
+          message: 'Failed to send reset password email',
+          data: [],
+        });
+      }
+      return res.json({
+        statusCode: 200,
+        message: 'Reset password email sent successfully',
+        data: [],
+      })
+    } catch (error) {
+      throw error;
+    }
   }
 
   @ApiOperation({ summary: 'Reset password' })
@@ -130,12 +196,29 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async resetPassword(
     @Body() { token, newPassword, confirmNewPassword }: ResetPasswordDto,
+    @Res() res: Response,
   ) {
-    return this.authService.resetPassword(
-      token,
-      newPassword,
-      confirmNewPassword,
-    );
+    try {
+      const success = this.authService.resetPassword(
+        token,
+        newPassword,
+        confirmNewPassword,
+      );
+      if (!success) {
+        return res.json({
+          statusCode: 400,
+          message: 'Failed to reset password',
+          data: [],
+        });
+      }
+      return res.json({
+        statusCode: 200,
+        message: 'Password reset successfully',
+        data: [],
+      })
+    } catch (error) {
+      throw error
+    }
   }
 
   @ApiOperation({ summary: 'Sign out' })
@@ -154,7 +237,9 @@ export class AuthController {
     });
 
     return res.json({
+      statusCode: 200,
       message: 'Signed out successfully',
+      data: [],
     });
   }
 }

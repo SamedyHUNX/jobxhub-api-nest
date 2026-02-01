@@ -1,5 +1,4 @@
 import {
-  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -11,7 +10,7 @@ import { InngestClientService } from './inngest.service';
 export class InngestHealthService {
   private readonly logger = new Logger(InngestHealthService.name);
 
-  constructor(private inngestService: InngestClientService) {}
+  constructor(private inngestService: InngestClientService) { }
 
   getInngest() {
     if (!this.inngestService || !this.inngestService.inngest) {

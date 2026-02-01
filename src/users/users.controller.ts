@@ -35,12 +35,29 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'Not Found' })
   @ApiResponse({ status: 500, description: 'Internal Server Error' })
   @UseInterceptors(ClassSerializerInterceptor)
-  updateMe(
+  async updateMe(
     @CurrentUser() user: any,
     @Body() updatedMeData: UpdatedMeDataDto,
     @UploadedFile(new ImageValidationPipe())
     image?: Express.Multer.File,
   ) {
-    return this.usersService.updateMe(user.id, updatedMeData, image);
+    try {
+      const updatedUserData = await this.usersService.updateMe(user.id, updatedMeData, image);
+
+      if (updatedUserData) {
+        return {
+          statusCode: 200,
+          message: 'User updated successfully',
+          data: [updatedUserData]
+        };
+      }
+      return {
+        statusCode: 404,
+        message: 'Failed to update user',
+        data: null
+      }
+    } catch (error) {
+      throw error
+    }
   }
 }
