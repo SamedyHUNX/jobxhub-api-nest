@@ -64,6 +64,13 @@
       "when": 1769846170993,
       "tag": "0008_cultured_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1769925233989,
+      "tag": "0009_colorful_exodus",
+      "breakpoints": true
     }
   ]
 }

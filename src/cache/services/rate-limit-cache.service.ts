@@ -338,4 +338,35 @@ export class RateLimitCacheService {
       });
     }
   }
+
+  /**
+   * Check IP-based rate limiting
+   * Prevents distributed brute force attacks
+   */
+  async checkIpRateLimit(ipAddress: string): Promise<void> {
+    const attempts =
+      await this.incrementEmailAttempts(ipAddress);
+
+    // Allow 10 attempts per IP per hour
+    if (attempts >= 3) {
+      this.logger.warn(`IP rate limit exceeded: ${ipAddress}`);
+
+      Sentry.captureMessage('IP rate limit exceeded on login', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          rate_limit_type: 'ip',
+        },
+        extra: {
+          ipAddress,
+          attempts,
+        },
+      });
+
+      throw new HttpException(
+        'Too many login attempts from this IP address. Please try again later.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
 }

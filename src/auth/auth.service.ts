@@ -250,12 +250,12 @@ export class AuthService {
           acceptLanguage: locale,
         };
         this.logger.debug(`Inngest event data: ${JSON.stringify(eventData, null, 2)}`);
-        
+
         const result = await this.inngest.send({
           name: 'jobxhub/user.created',
           data: eventData,
         });
-        
+
         this.logger.log(`Inngest event sent successfully for user: ${user.email} (${user.id})`);
         this.logger.debug(`Inngest send result: ${JSON.stringify(result, null, 2)}`);
       } catch (inngestError: any) {
@@ -384,7 +384,7 @@ export class AuthService {
             userId: user.id,
             email: user.email,
           },
-        });
+        })
       } catch (inngestError) {
         // Don't fail verification if event fails, just log it
         Sentry.captureException(inngestError, {
@@ -436,7 +436,7 @@ export class AuthService {
     try {
       if (this.configService.isProduction) {
         // 1. Check IP-based rate limiting (global protection)
-        await this.checkIpRateLimit(ipAddress);
+        await this.rateLimitCache.checkIpRateLimit(ipAddress);
 
         // 2. Check email-based rate limiting (account protection)
         await this.rateLimitCache.checkEmailRateLimit(email);
@@ -589,37 +589,6 @@ export class AuthService {
       }
 
       throw error;
-    }
-  }
-
-  /**
-   * Check IP-based rate limiting
-   * Prevents distributed brute force attacks
-   */
-  private async checkIpRateLimit(ipAddress: string): Promise<void> {
-    const attempts =
-      await this.rateLimitCache.incrementEmailAttempts(ipAddress);
-
-    // Allow 10 attempts per IP per hour
-    if (attempts >= 3) {
-      this.logger.warn(`IP rate limit exceeded: ${ipAddress}`);
-
-      Sentry.captureMessage('IP rate limit exceeded on login', {
-        level: 'warning',
-        tags: {
-          operation: 'sign_in',
-          rate_limit_type: 'ip',
-        },
-        extra: {
-          ipAddress,
-          attempts,
-        },
-      });
-
-      throw new HttpException(
-        'Too many login attempts from this IP address. Please try again later.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
     }
   }
 
@@ -776,7 +745,11 @@ export class AuthService {
               acceptLanguage,
             },
           })
+          .then(() => {
+            this.logger.log(`Successfully queued password reset email for ${email}`);
+          })
           .catch((error) => {
+            this.logger.error(`Failed to queue password reset email for ${email}:`, error);
             Sentry.captureException(error, {
               tags: {
                 operation: 'password_reset',
@@ -787,7 +760,6 @@ export class AuthService {
                 acceptLanguage,
               },
             });
-            this.logger.error('Failed to send password reset email', error);
           });
       }
 

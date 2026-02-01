@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EmailService } from '@/common/services/email.service';
-import { InngestHealthService } from '../services/inngest-health.service';
+import { InngestHealthService } from './inngest-health.service';
 import * as Sentry from '@sentry/nestjs';
 
 @Injectable()
@@ -14,7 +14,7 @@ export class UserFunctionsService {
     private readonly emailService: EmailService,
   ) {
     this.logger.log('Initializing Inngest functions...');
-    
+
     this.createUserFunction = this.inngest.createFunction(
       { id: 'jobxhub/create-db-user', name: 'JobXHub - Create DB User' },
       { event: 'jobxhub/user.created' },

@@ -12,7 +12,7 @@ export class EmailService {
     const smtpPort = this.configService.smtpPort;
     // Port 465 typically uses SSL (secure: true), port 587 uses STARTTLS (secure: false, requireTLS: true)
     const isSecurePort = smtpPort === 465;
-    
+
     const smtpConfig: any = {
       host: this.configService.smtpHost,
       port: smtpPort,
@@ -132,7 +132,7 @@ export class EmailService {
     try {
       this.logger.log(`Sending verification email to: ${to}`);
       this.logger.debug(`Email from: ${mailOptions.from}, subject: ${mailOptions.subject}`);
-      
+
       // Verify connection before sending
       try {
         await this.transporter.verify();
@@ -153,13 +153,13 @@ export class EmailService {
         responseCode: error?.responseCode,
         stack: error?.stack,
       };
-      
+
       this.logger.error(
         `Failed to send verification email to: ${to}. Error: ${error?.message}`,
         error?.stack || error,
       );
       this.logger.error(`Email error details: ${JSON.stringify(errorDetails, null, 2)}`);
-      
+
       Sentry.captureException(error, {
         tags: {
           operation: 'send_verification_email',
