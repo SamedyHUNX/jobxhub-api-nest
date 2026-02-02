@@ -23,6 +23,7 @@ import { S3HealthService } from '@/s3/services/s3-health.service';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { HashingService } from '@/common/services/hashing.service';
 import { User } from '@/types';
+import { TokenService } from '@/cache/services/token.service';
 
 @Injectable()
 export class AuthService {
@@ -36,6 +37,7 @@ export class AuthService {
     private rateLimitCacheService: RateLimitCacheService,
     private inngestHealth: InngestHealthService,
     private dbHealth: DrizzleHealthService,
+    private readonly tokenService: TokenService,
   ) { }
 
   private get inngest() {
@@ -51,7 +53,7 @@ export class AuthService {
   }
 
   private get s3() {
-    return this.s3Health.getS3();
+    return this.s3Health.s3;
   }
 
   private generateToken(payload: any) {
@@ -64,13 +66,6 @@ export class AuthService {
 
   private get rateLimitCache() {
     return this.rateLimitCacheService;
-  }
-
-  private async generateAndHashToken(expireMinutes: number) {
-    const token = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    const expiresAt = new Date(Date.now() + expireMinutes * 60 * 1000);
-    return { token, hashedToken, expiresAt };
   }
 
   private async getCachedUser(email: string) {
@@ -141,19 +136,6 @@ export class AuthService {
       phoneNumber,
     } = data;
 
-    // Validate required fields
-    if (
-      !username ||
-      !password ||
-      !email ||
-      !firstName ||
-      !lastName ||
-      !dateOfBirth ||
-      !phoneNumber
-    ) {
-      throw new BadRequestException('All fields are required');
-    }
-
     if (!imageFile) {
       throw new BadRequestException('Profile image is required');
     }
@@ -189,7 +171,7 @@ export class AuthService {
         token: verificationToken,
         hashedToken: hashedVerificationToken,
         expiresAt: verificationExpires,
-      } = await this.generateAndHashToken(60 * 24);
+      } = await this.tokenService.generateAndHashToken(60 * 24);
 
       const frontendUrl = this.configService.publicUrl;
       const locale = acceptLanguage || 'en';
@@ -426,10 +408,6 @@ export class AuthService {
     }
     const { email, password } = data;
     const startTime = Date.now();
-
-    if (!email || !password) {
-      throw new BadRequestException('Email and password are required');
-    }
 
     try {
       if (this.configService.isProduction) {
@@ -710,7 +688,7 @@ export class AuthService {
         token: resetToken,
         hashedToken,
         expiresAt,
-      } = await this.generateAndHashToken(15);
+      } = await this.tokenService.generateAndHashToken(15);
 
       // Update database if user exists and should send email
       if (shouldSendEmail) {
@@ -890,9 +868,7 @@ export class AuthService {
 
       if (!user) {
         this.logger.warn(`Sign out attempted for non-existent user: ${userId}`);
-        return {
-          message: 'Signed out successfully',
-        };
+        return true
       }
 
       // 2. Increment token version to invalidate all existing tokens
@@ -916,7 +892,6 @@ export class AuthService {
 
       return true
     } catch (error) {
-      // Log error but don't fail the sign-out
       Sentry.captureException(error, {
         tags: {
           operation: 'sign_out',
@@ -928,10 +903,8 @@ export class AuthService {
 
       this.logger.error(`Sign out error for user ${userId}: ${error?.message}`);
 
-      // Still return success - user experience is more important
-      return {
-        message: 'Signed out successfully',
-      };
+      // Still return success
+      return true
     }
   }
 }

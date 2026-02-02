@@ -32,7 +32,7 @@ export class UsersService {
 
 
   private get s3() {
-    return this.s3Health.getS3();
+    return this.s3Health.s3;
   }
 
   updateMe = async (

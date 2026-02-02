@@ -10,9 +10,9 @@ import * as Sentry from '@sentry/node';
 export class S3HealthService {
   private readonly logger = new Logger(S3HealthService.name);
 
-  constructor(private s3Service: S3Service) {}
+  constructor(private s3Service: S3Service) { }
 
-  getS3() {
+  get s3() {
     if (!this.s3Service) {
       const message = `S3 service is down at ${new Date().toISOString()}`;
       this.logger.error(message);

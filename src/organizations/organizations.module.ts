@@ -10,6 +10,5 @@ import { CacheModule } from '@/cache/cache.module';
   imports: [S3Module, InngestModule, CommonModule, CacheModule],
   controllers: [OrganizationsController],
   providers: [OrganizationsService],
-  exports: [OrganizationsService],
 })
 export class OrganizationsModule { }

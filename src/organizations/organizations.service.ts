@@ -53,11 +53,11 @@ export class OrganizationsService {
   }
 
   private get s3() {
-    return this.s3Health.getS3();
+    return this.s3Health.s3;
   }
 
   // Get all orgs with optional filtering
-  findAll = async (search?: string, isVerified?: boolean, userId?: string) => {
+  findAll = async (userId: string, search?: string, isVerified?: boolean) => {
     const cacheKey = `orgs:all${search ? `:search:${search}` : ''}${isVerified !== undefined ? `:verified:${isVerified}` : ''}${userId ? `:user:${userId}` : ''}`;
 
     const cached = await this.cache.get(cacheKey);

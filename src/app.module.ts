@@ -25,7 +25,6 @@ import { JobListingsModule } from './job-listings/job-listings.module';
     UsersModule,
     JobListingsModule,
     SentryModule.forRoot(),
-    JobListingsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -62,16 +62,17 @@ export class OrganizationsController {
 
   // Get all organizations with optional filtering: GET /organizations?search=name&isVerified=true
   @Get()
+  @UseGuards(JwtAuthGuard)
   async findAll(
+    @CurrentUser() user: any,
     @Query('search') search?: string,
     @Query('isVerified') isVerified?: string,
-    @Query('userId') userId?: string
   ) {
     const isVerifiedBool =
       isVerified === 'true' ? true : isVerified === 'false' ? false : undefined;
 
     try {
-      const allOrganizations = await this.orgsService.findAll(search, isVerifiedBool, userId);
+      const allOrganizations = await this.orgsService.findAll(user.id, search, isVerifiedBool);
 
       if (!allOrganizations) {
         throw new NotFoundException('Organizations not found');
