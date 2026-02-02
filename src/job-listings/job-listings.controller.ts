@@ -23,7 +23,9 @@ export class JobListingsController {
   // Get all job listings: GET /job-listings
   @Get()
   @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
   async findAll(
+    @CurrentUser() user: any,
     @Query('search') search?: string,
     @Query('organizationId') organizationId?: string,
     @Query('status') status?: string,
@@ -39,6 +41,7 @@ export class JobListingsController {
         type,
         locationRequirement,
         experienceLevel,
+        user.id
       );
 
       return {

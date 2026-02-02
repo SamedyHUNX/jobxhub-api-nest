@@ -18,7 +18,7 @@ export const OrganizationUserSettingsTable = pgTable(
     organizationId: uuid('organization_id')
       .notNull()
       .references(() => OrganizationTable.id, { onDelete: 'cascade' }),
-    role: varchar('role').notNull().default('Member'),
+    role: varchar('role').notNull().default('MEMBER'),
     newApplicationEmailNotifications: boolean(
       'new_application_email_notifications',
     )

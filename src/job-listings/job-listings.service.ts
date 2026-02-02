@@ -68,7 +68,7 @@ export class JobListingsService {
 
 
   // Get all job listings with optional filtering
-  findAll = async (search?: string, organizationId?: string, status?: string, type?: string, locationRequirement?: string, experienceLevel?: string) => {
+  findAll = async (search?: string, organizationId?: string, status?: string, type?: string, locationRequirement?: string, experienceLevel?: string, userId?: string) => {
     const baseQuery = this.db
       .select()
       .from(JobListingTable)

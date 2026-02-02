@@ -170,11 +170,12 @@ export class OrganizationsService {
       }
 
       try {
-        // Assign the creator as a member of the organization
+        // Assign the creator as an owner of the organization
         await this.db.insert(OrganizationUserSettingsTable).values({
           userId,
           organizationId: organization.id,
           newApplicationEmailNotifications: false,
+          role: 'OWNER'
         });
       } catch (settingsError: any) {
         // Rollback: Delete the organization we just created
