@@ -1,7 +1,7 @@
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateJobListingDto } from './dtos/job-listings.dto';
-import { JobListingTable, OrganizationTable } from '@/drizzle/schema';
+import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable } from '@/drizzle/schema';
 import { and, eq, like, or } from 'drizzle-orm';
 
 @Injectable()
@@ -27,6 +27,26 @@ export class JobListingsService {
       throw new NotFoundException('The organization does not exist');
     }
 
+    // Verify user is owner of the organization
+    const [membership] = await this.db
+      .select({
+        role: OrganizationUserSettingsTable.role,
+      })
+      .from(OrganizationUserSettingsTable)
+      .where(
+        and(
+          eq(OrganizationUserSettingsTable.organizationId, organizationId),
+          eq(OrganizationUserSettingsTable.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!membership || membership.role !== 'OWNER') {
+      throw new ForbiddenException(
+        'You are not authorized to create job listings for this organization'
+      );
+    }
+
     // Create job listing
     const [jobListing] = await this.db
       .insert(JobListingTable)
@@ -40,16 +60,12 @@ export class JobListingsService {
       .returning();
 
     this.logger.log(
-      `Job listing created with ID: ${jobListing.id} for organization: ${organizationId}`,
+      `Job listing created with ID: ${jobListing.id} for organization: ${organizationId} by user: ${userId}`,
     );
 
-    return {
-      message: 'Job created successfuly',
-      data: {
-        jobListings: [jobListing],
-      },
-    };
+    return jobListing
   };
+
 
   // Get all job listings with optional filtering
   findAll = async (search?: string, organizationId?: string, status?: string, type?: string, locationRequirement?: string, experienceLevel?: string) => {
@@ -95,8 +111,6 @@ export class JobListingsService {
         ? await baseQuery.where(and(...conditions))
         : await baseQuery;
 
-    return {
-      jobListings,
-    };
+    return jobListings
   }
 }

@@ -914,9 +914,7 @@ export class AuthService {
         `User ${user.email} (ID: ${userId}) signed out successfully`,
       );
 
-      return {
-        message: 'Signed out successfully',
-      };
+      return true
     } catch (error) {
       // Log error but don't fail the sign-out
       Sentry.captureException(error, {

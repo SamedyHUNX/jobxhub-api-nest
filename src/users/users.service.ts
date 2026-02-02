@@ -92,6 +92,8 @@ export class UsersService {
           'avatars',
         );
 
+        console.log('diddy', url)
+
         uploadedImageKey = key; // Track for cleanup
         updateData.imageUrl = url;
       }
