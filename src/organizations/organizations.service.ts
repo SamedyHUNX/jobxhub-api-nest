@@ -113,7 +113,7 @@ export class OrganizationsService {
     imageFile: Express.Multer.File,
     userId: string,
   ) => {
-    const { orgName, slug } = data;
+    const { orgName, orgDescription, orgSlug } = data;
 
     // Limit to 5 organizations per account
     const userOrganizations = await this.db
@@ -139,7 +139,7 @@ export class OrganizationsService {
       .where(
         or(
           eq(OrganizationTable.orgName, orgName),
-          eq(OrganizationTable.slug, slug),
+          eq(OrganizationTable.slug, orgSlug),
         ),
       )
       .limit(1);
@@ -148,7 +148,7 @@ export class OrganizationsService {
       if (existingOrg[0].orgName === orgName) {
         throw new ConflictException('Organization name already exists');
       }
-      if (existingOrg[0].slug === slug) {
+      if (existingOrg[0].slug === orgSlug) {
         throw new ConflictException('Organization slug already taken');
       }
     }
@@ -170,7 +170,8 @@ export class OrganizationsService {
           .values({
             orgName,
             imageUrl,
-            slug,
+            description: orgDescription,
+            slug: orgSlug,
             createdBy: userId,
           })
           .returning();
