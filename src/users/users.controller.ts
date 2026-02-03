@@ -28,24 +28,20 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   async getAllUsers(@CurrentUser() user: User) {
-    try {
-      const users = await this.usersService.getAll(user.id, user.userRole);
+    const users = await this.usersService.getAll(user.id, user.userRole);
 
-      if (!users) {
-        return {
-          statusCode: 404,
-          message: 'Users not found',
-          data: []
-        }
-      }
-
+    if (!users) {
       return {
-        statusCode: 200,
-        message: 'Get all users successfully',
-        data: users
+        statusCode: 404,
+        message: 'Users not found',
+        data: []
       }
-    } catch (error) {
-      throw error
+    }
+
+    return {
+      statusCode: 200,
+      message: 'Get all users successfully',
+      data: users
     }
   }
 
@@ -71,23 +67,19 @@ export class UsersController {
     @UploadedFile(new ImageValidationPipe())
     image?: Express.Multer.File,
   ) {
-    try {
-      const updatedUserData = await this.usersService.updateMe(user.id, updatedMeData, image);
+    const updatedUserData = await this.usersService.updateMe(user.id, updatedMeData, image);
 
-      if (updatedUserData) {
-        return {
-          statusCode: 200,
-          message: 'User updated successfully',
-          data: [updatedUserData]
-        };
-      }
+    if (updatedUserData) {
       return {
-        statusCode: 404,
-        message: 'Failed to update user',
-        data: []
-      }
-    } catch (error) {
-      throw error
+        statusCode: 200,
+        message: 'User updated successfully',
+        data: [updatedUserData]
+      };
+    }
+    return {
+      statusCode: 404,
+      message: 'Failed to update user',
+      data: []
     }
   }
 }

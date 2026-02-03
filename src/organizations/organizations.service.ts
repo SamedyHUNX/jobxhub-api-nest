@@ -172,6 +172,7 @@ export class OrganizationsService {
             imageUrl,
             description: orgDescription,
             slug: orgSlug,
+            membersCount: 1,
             createdBy: userId,
           })
           .returning();

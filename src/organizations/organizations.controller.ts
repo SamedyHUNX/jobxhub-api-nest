@@ -55,7 +55,7 @@ export class OrganizationsController {
     await this.orgsService.create(createOrganizationDto, file, user.id);
 
     return {
-      statusCode: 201,
+      statusCode: 200,
       message: 'Organization created successfully',
       data: []
     };
