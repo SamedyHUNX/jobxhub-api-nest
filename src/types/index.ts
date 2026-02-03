@@ -4,8 +4,10 @@ export interface User {
     username: string;
     firstName: string;
     lastName: string;
-    dateOfBirth: string;
+    imageUrl: string;
+    userRole: string;
     phoneNumber: string;
+    dateOfBirth: string;
     createdAt: string;
     updatedAt: string;
 }

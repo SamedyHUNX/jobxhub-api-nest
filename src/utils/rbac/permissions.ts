@@ -1,0 +1,7 @@
+export const Permissions = {
+    FETCH_ALL_USERS: 'FETCH_ALL_USERS',
+    UPDATE_USER: 'UPDATE_USER',
+    DELETE_USER: 'DELETE_USER',
+    CREATE_USER: 'CREATE_USER',
+    FETCH_USER: 'FETCH_USER',
+} as const;

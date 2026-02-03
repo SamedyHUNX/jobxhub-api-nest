@@ -3,6 +3,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -63,7 +64,7 @@ export class OrganizationsService {
     const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
 
-    // Build conditions array with explicit type
+    // Build conditions array for OrganizationTable only
     const conditions: SQL<unknown>[] = [];
 
     if (search) {
@@ -78,8 +79,6 @@ export class OrganizationsService {
 
     // If filtering by userId, use join query
     if (userId) {
-      conditions.push(eq(OrganizationUserSettingsTable.userId, userId));
-
       const result = await this.db
         .select()
         .from(OrganizationTable)
@@ -87,7 +86,12 @@ export class OrganizationsService {
           OrganizationUserSettingsTable,
           eq(OrganizationTable.id, OrganizationUserSettingsTable.organizationId)
         )
-        .where(conditions.length > 0 ? and(...conditions) : undefined);
+        .where(
+          and(
+            eq(OrganizationUserSettingsTable.userId, userId),
+            conditions.length > 0 ? and(...conditions) : undefined
+          )
+        );
 
       // Extract just the organization objects from the join result
       organizations = result.map(row => row.organizations);
@@ -110,6 +114,23 @@ export class OrganizationsService {
     userId: string,
   ) => {
     const { orgName, slug } = data;
+
+    // Limit to 5 organizations per account
+    const userOrganizations = await this.db
+      .select()
+      .from(OrganizationUserSettingsTable)
+      .where(
+        and(
+          eq(OrganizationUserSettingsTable.userId, userId),
+          eq(OrganizationUserSettingsTable.role, 'OWNER'),
+        ),
+      );
+
+    if (userOrganizations.length >= 5) {
+      throw new ForbiddenException(
+        'You have reached the maximum limit of 5 organizations per account',
+      );
+    }
 
     // Check if organization with same orgName or slug already exists
     const existingOrg = await this.db

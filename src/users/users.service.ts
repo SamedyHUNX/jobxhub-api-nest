@@ -6,12 +6,15 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { UpdatedMeDataDto } from './dtos/update-me.dto';
 import { UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { UserCacheService } from '@/cache/services/user-cache.service';
+import { hasPermission } from '@/utils/rbac/authz';
+import { Permissions } from '@/utils/rbac/permissions';
 
 @Injectable()
 export class UsersService {
@@ -33,6 +36,41 @@ export class UsersService {
 
   private get s3() {
     return this.s3Health.s3;
+  }
+
+  getAll = async (userId: string, userRole: string) => {
+    if (!hasPermission(userRole, Permissions.FETCH_ALL_USERS)) {
+      throw new UnauthorizedException('You cannot access this feature')
+    }
+
+    try {
+      const users = await this.dbService.db
+        .select({
+          id: UserTable.id,
+          email: UserTable.email,
+          firstName: UserTable.firstName,
+          lastName: UserTable.lastName,
+          username: UserTable.username,
+          imageUrl: UserTable.imageUrl,
+          userRole: UserTable.userRole,
+          phoneNumber: UserTable.phoneNumber,
+          dateOfBirth: UserTable.dateOfBirth,
+          createdAt: UserTable.createdAt,
+          updatedAt: UserTable.updatedAt,
+        })
+        .from(UserTable)
+        .where(not(eq(UserTable.id, userId)))
+        .limit(10);
+
+
+      if (!users || users.length === 0) {
+        throw new NotFoundException('Users not found');
+      }
+
+      return users;
+    } catch (error) {
+      throw error;
+    }
   }
 
   updateMe = async (

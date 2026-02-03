@@ -23,6 +23,7 @@ import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { IdValidationPipe } from '@/utils/image-validation-pipe';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
+import type { User } from '@/types';
 
 @Controller('organizations')
 export class OrganizationsController {
@@ -49,7 +50,7 @@ export class OrganizationsController {
   async create(
     @Body() createOrganizationDto: CreateOrganizationDto,
     @UploadedFile() file: Express.Multer.File,
-    @CurrentUser() user: any,
+    @CurrentUser() user: User,
   ) {
     await this.orgsService.create(createOrganizationDto, file, user.id);
 
@@ -64,28 +65,24 @@ export class OrganizationsController {
   @Get()
   @UseGuards(JwtAuthGuard)
   async findAll(
-    @CurrentUser() user: any,
+    @CurrentUser() user: User,
     @Query('search') search?: string,
     @Query('isVerified') isVerified?: string,
   ) {
     const isVerifiedBool =
       isVerified === 'true' ? true : isVerified === 'false' ? false : undefined;
 
-    try {
-      const allOrganizations = await this.orgsService.findAll(user.id, search, isVerifiedBool);
+    const allOrganizations = await this.orgsService.findAll(
+      user.id,
+      search,
+      isVerifiedBool
+    );
 
-      if (!allOrganizations) {
-        throw new NotFoundException('Organizations not found');
-      }
-
-      return {
-        message: 'Organizations fetched successfully',
-        data: allOrganizations,
-        statusCode: 200
-      };
-    } catch (error) {
-      throw error
-    }
+    return {
+      message: 'Organizations fetched successfully',
+      data: allOrganizations,
+      statusCode: 200
+    };
   }
 
   // Get organizations by user ID: GET /organizations/user/:userId
