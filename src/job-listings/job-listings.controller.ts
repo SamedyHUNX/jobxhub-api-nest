@@ -4,13 +4,15 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { JobListingsService } from './job-listings.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
-import { CreateJobListingDto } from './dtos/job-listings.dto';
+import { CreateJobListingDto, UpdateJobListingDto } from './dtos/job-listings.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { User } from '@/types';
@@ -52,6 +54,28 @@ export class JobListingsController {
     }
   }
 
+  // Get a job listing based on Id: GET /job-listings/:id
+  @Get(':id')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async findOne(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @SelectedOrgId() orgId: string,
+  ) {
+    const jobListings = await this.jobListingsService.findOne(
+      id,
+      user.id,
+      orgId
+    );
+
+    return {
+      message: 'Job listings fetched successfully',
+      data: [jobListings],
+      statusCode: 200
+    }
+  }
+
   // Create a new job listing: POST /job-listings
   @ApiOperation({ summary: 'Create a new job listing' })
   @ApiResponse({ status: 201, description: 'Job listing created successfully' })
@@ -73,4 +97,30 @@ export class JobListingsController {
       statusCode: 201
     };
   }
+
+  // Update a job listing: PUT /job-listings/:jobId
+  @Put('/:jobId')
+  @UseGuards(JwtAuthGuard)
+  async update(
+    @Body() updateJobListingDto: UpdateJobListingDto,
+    @CurrentUser() user: User,
+    @SelectedOrgId() orgId: string,
+    @Param('jobId') jobId: string
+  ) {
+    const success = await this.jobListingsService.update(
+      user,
+      orgId,
+      jobId,
+      updateJobListingDto,
+    );
+
+    if (success) {
+      return {
+        message: 'Job listing updated successfully',
+        data: [],
+        statusCode: 200,
+      };
+    }
+  }
+
 }

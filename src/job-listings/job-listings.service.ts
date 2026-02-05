@@ -1,21 +1,22 @@
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { CreateJobListingDto } from './dtos/job-listings.dto';
+import { ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { CreateJobListingDto, UpdateJobListingDto } from './dtos/job-listings.dto';
 import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable } from '@/drizzle/schema';
 import { and, eq, like, or } from 'drizzle-orm';
+import type { User } from '@/types';
+import { PermissionService } from '@/common/services/permission.service';
 
 @Injectable()
 export class JobListingsService {
   private readonly logger = new Logger(JobListingsService.name);
 
-  constructor(private dbHealth: DrizzleHealthService) { }
+  constructor(private dbHealth: DrizzleHealthService, private permission: PermissionService) { }
 
   private get db() {
     return this.dbHealth.getDb();
   }
 
   create = async (data: CreateJobListingDto, userId: string, orgId: string) => {
-    console.log('hi', orgId)
     const { ...jobData } = data;
 
     // Verify org exists
@@ -119,5 +120,62 @@ export class JobListingsService {
     }))
 
     return flattened
+  }
+
+  // Find job listings based on id
+  findOne = async (id: string, userId: string, orgId: string) => {
+    const [jobListing] = await this.db
+      .select()
+      .from(JobListingTable)
+      .where(eq(JobListingTable.id, id))
+      .limit(1);
+
+    if (!jobListing) {
+      throw new NotFoundException('Job listing not found');
+    }
+
+    return jobListing
+  }
+
+  // Update a job listing based on id
+  update = async (user: User, orgId: string, jobId: string, dto: UpdateJobListingDto) => {
+    const canUpdate = this.permission.hasPermission(user, orgId, 'UPDATE_JOB_LISTING');
+
+    if (!canUpdate) {
+      throw new ForbiddenException('You are not authorized to update this job listing');
+    }
+
+    const [jobListing] = await this.db
+      .select()
+      .from(JobListingTable)
+      .where(eq(JobListingTable.id, jobId))
+
+    if (!jobListing) {
+      throw new NotFoundException('Job listing not found');
+    }
+
+    try {
+      await this.db
+        .update(JobListingTable)
+        .set({
+          title: dto.title,
+          description: dto.description,
+          wage: dto.wage,
+          wageInterval: dto.wageInterval,
+          stateAbbreviation: dto.stateAbbreviation,
+          city: dto.city,
+          isFeatured: dto.isFeatured,
+          locationRequirement: dto.locationRequirement,
+          experienceLevel: dto.experienceLevel,
+          status: dto.status,
+          type: dto.type,
+          postedAt: dto.postedAt ? new Date(dto.postedAt) : undefined,
+        })
+        .where(eq(JobListingTable.id, jobId));
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update job listing');
+    }
+
+    return true
   }
 }

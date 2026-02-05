@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { HashingService } from './services/hashing.service';
 import { ConfigService } from './services/config.service';
 import { EmailService } from './services/email.service';
+import { PermissionService } from './services/permission.service';
 
 @Global()
 @Module({
@@ -11,7 +12,7 @@ import { EmailService } from './services/email.service';
       isGlobal: true,
     }),
   ],
-  providers: [HashingService, ConfigService, EmailService],
-  exports: [HashingService, ConfigService, EmailService],
+  providers: [HashingService, ConfigService, EmailService, PermissionService],
+  exports: [HashingService, ConfigService, EmailService, PermissionService],
 })
 export class CommonModule { }

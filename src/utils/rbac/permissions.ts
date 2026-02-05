@@ -1,7 +1,20 @@
 export const Permissions = {
+    // User Management
     FETCH_ALL_USERS: 'FETCH_ALL_USERS',
     UPDATE_USER: 'UPDATE_USER',
     DELETE_USER: 'DELETE_USER',
     CREATE_USER: 'CREATE_USER',
     FETCH_USER: 'FETCH_USER',
+
+    // Organization Management
+    DELETE_ORG: 'DELETE_ORG',
+    UPDATE_ORG: 'UPDATE_ORG',
+    CREATE_ORG: 'CREATE_ORG',
+    FETCH_ORG: 'FETCH_ORG',
+
+    // Job Listing Management
+    CREATE_JOB_LISTING: 'CREATE_JOB_LISTING',
+    UPDATE_JOB_LISTING: 'UPDATE_JOB_LISTING',
+    DELETE_JOB_LISTING: 'DELETE_JOB_LISTING',
+    FETCH_JOB_LISTING: 'FETCH_JOB_LISTING',
 } as const;

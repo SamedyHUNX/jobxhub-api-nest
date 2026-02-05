@@ -23,6 +23,8 @@ import {
   MinLength,
 } from 'class-validator';
 
+import { PartialType } from '@nestjs/mapped-types';
+
 export class CreateJobListingDto {
   @IsString()
   @IsNotEmpty()
@@ -73,3 +75,7 @@ export class CreateJobListingDto {
   @IsOptional()
   postedAt?: string;
 }
+
+// Update DTO: all fields optional
+export class UpdateJobListingDto extends PartialType(CreateJobListingDto) { }
+

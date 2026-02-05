@@ -13,7 +13,7 @@ import { UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { UserCacheService } from '@/cache/services/user-cache.service';
-import { hasPermission } from '@/utils/rbac/authz';
+import { hasAppPermission } from '@/utils/rbac/authz';
 import { Permissions } from '@/utils/rbac/permissions';
 
 @Injectable()
@@ -39,7 +39,7 @@ export class UsersService {
   }
 
   getAll = async (userId: string, userRole: string) => {
-    if (!hasPermission(userRole, Permissions.FETCH_ALL_USERS)) {
+    if (!hasAppPermission(userRole, Permissions.FETCH_ALL_USERS)) {
       throw new UnauthorizedException('You cannot access this feature')
     }
 
@@ -73,7 +73,7 @@ export class UsersService {
     }
   }
 
-  updateMe = async (
+  update = async (
     userId: string,
     data: UpdatedMeDataDto,
     imageFile?: Express.Multer.File,
