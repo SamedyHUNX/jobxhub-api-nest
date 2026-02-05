@@ -13,6 +13,7 @@ export const OrganizationTable = pgTable('organizations', {
   id: idCol(),
   orgName: varchar('org_name').notNull(),
   imageUrl: varchar('image_url'),
+  description: varchar('description'),
   slug: varchar('slug').unique().notNull(),
   isVerified: boolean('is_verified').notNull().default(false),
   isBanned: boolean('is_banned').notNull().default(false),

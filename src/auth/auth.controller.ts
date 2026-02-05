@@ -23,7 +23,7 @@ import {
 } from './dtos/auth.dto';
 import { ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { JwtAuthGuard } from './jwt/jwt.guard';
-import { CurrentUser } from './decorators/current-user.decorator';
+import { CurrentUser } from '../decorators/current-user.decorator';
 import { plainToInstance } from 'class-transformer';
 import { UserResponseDto } from '@/users/dtos/user-response.dto';
 import type { Response } from 'express';
@@ -32,10 +32,11 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   // Sign Up (/api/auth/signup)
   @Post('sign-up')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Create a user' })
   @ApiResponse({ status: 200, description: 'Create a user' })
   @UseInterceptors(
@@ -43,31 +44,71 @@ export class AuthController {
       limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )
-  signUp(
+  async signUp(
     @Body() data: SignUpDto,
     @UploadedFile(new ImageValidationPipe()) image: Express.Multer.File,
     @Headers('accept-language') acceptLanguage: string,
+    @Res() res: Response,
   ) {
-    return this.authService.signUp(data, image, acceptLanguage);
+    const success = await this.authService.signUp(data, image, acceptLanguage);
+    if (success) {
+      return res.json({
+        statusCode: 200,
+        message: 'User signed up successfully. Please verify your email.',
+        data: [],
+      });
+    }
+
+    return res.json({
+      statusCode: 400,
+      message: 'User sign up failed',
+      data: [],
+    });
   }
+
 
   // Verify Email (/api/auth/verify-email)
   @ApiOperation({ summary: 'Verify email' })
   @ApiResponse({ status: 200, description: 'Verify email' })
+  @HttpCode(201)
   @Post('verify-email')
-  verifyEmail(@Body('token') token: string) {
-    return this.authService.verifyEmail(token);
+  async verifyEmail(@Body('token') token: string, @Res() res: Response) {
+    const success = await this.authService.verifyEmail(token);
+    if (success) {
+      return res.json({
+        statusCode: 200,
+        message: 'Email verified successfully',
+        data: [],
+      });
+    }
+
+    return res.json({
+      statusCode: 400,
+      message: 'Email verification failed',
+      data: [],
+    });
   }
 
+
   // Sign In (/api/auth/signin)
+  @ApiOperation({ summary: 'Sign in' })
+  @ApiResponse({ status: 200, description: 'Sign in' })
+  @HttpCode(200)
   @Post('sign-in')
   async signIn(
     @Body() data: SignInDto,
     @Res() res: Response,
     @Ip() ipAddress: string,
+    @CurrentUser() user: any,
   ) {
-    const { token } = await this.authService.signIn(data, ipAddress);
-
+    const token = await this.authService.signIn(data, ipAddress, user);
+    if (!token) {
+      return res.json({
+        statusCode: 400,
+        message: 'User sign in failed',
+        data: [],
+      });
+    }
     // Set HttpOnly Secure SameSite cookie
     res.cookie('access_token', token, {
       httpOnly: true, // Not accessible via JavaScript
@@ -79,45 +120,94 @@ export class AuthController {
 
     // Return user info without exposing token
     return res.json({
-      status: 'success',
       message: 'Signed in successfully',
-      code: 200,
-    });
+      data: [], // get data from getMe
+      statusCode: 200,
+    })
   }
 
   // Get current user (/api/auth/me)
+  @ApiOperation({ summary: 'Get current user' })
+  @ApiResponse({ status: 200, description: 'Get current user' })
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   getMe(@CurrentUser() user: any) {
-    return plainToInstance(UserResponseDto, user, {
+    const userData = plainToInstance(UserResponseDto, user, {
       excludeExtraneousValues: true,
     });
+
+    if (!userData) {
+      return {
+        statusCode: 404,
+        message: 'User not found',
+        data: [],
+      };
+    }
+
+    return {
+      statusCode: 200,
+      message: 'User fetched successfully',
+      data: [userData],
+    };
   }
 
+
   // POST forgot-password
+  @ApiOperation({ summary: 'Forgot password' })
+  @ApiResponse({ status: 200, description: 'Forgot password' })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   async requestPasswordReset(
     @Body() { email }: RequestPasswordResetDto,
     @Headers('accept-language') acceptLanguage: string,
     @Ip() ipAddress: string,
+    @Res() res: Response,
   ) {
-    return this.authService.forgotPassword(email, acceptLanguage, ipAddress);
+    const success = this.authService.forgotPassword(email, acceptLanguage, ipAddress);
+    if (!success) {
+      return res.json({
+        statusCode: 400,
+        message: 'Failed to send reset password email',
+        data: [],
+      });
+    }
+    return res.json({
+      statusCode: 200,
+      message: 'Reset password email sent successfully',
+      data: [],
+    })
   }
 
+  @ApiOperation({ summary: 'Reset password' })
+  @ApiResponse({ status: 200, description: 'Reset password' })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(
     @Body() { token, newPassword, confirmNewPassword }: ResetPasswordDto,
+    @Res() res: Response,
   ) {
-    return this.authService.resetPassword(
+    const success = this.authService.resetPassword(
       token,
       newPassword,
       confirmNewPassword,
     );
+    if (!success) {
+      return res.json({
+        statusCode: 400,
+        message: 'Failed to reset password',
+        data: [],
+      });
+    }
+    return res.json({
+      statusCode: 200,
+      message: 'Password reset successfully',
+      data: [],
+    })
   }
 
+  @ApiOperation({ summary: 'Sign out' })
+  @ApiResponse({ status: 200, description: 'Sign out' })
   @Post('sign-out')
   @UseGuards(JwtAuthGuard)
   async signOut(@Res() res: Response, @CurrentUser() user: any) {
@@ -132,7 +222,9 @@ export class AuthController {
     });
 
     return res.json({
+      statusCode: 200,
       message: 'Signed out successfully',
+      data: [],
     });
   }
 }

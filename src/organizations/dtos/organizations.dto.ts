@@ -8,5 +8,10 @@ export class CreateOrganizationDto {
 
   @IsString()
   @IsNotEmpty()
-  slug: string;
+  @MinLength(10)
+  orgDescription: string;
+
+  @IsString()
+  @IsNotEmpty()
+  orgSlug: string;
 }

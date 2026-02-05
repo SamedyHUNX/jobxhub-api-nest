@@ -13,7 +13,7 @@ import {
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
-import { ConfigService } from '@/config/config.service';
+import { ConfigService } from '@/common/services/config.service';
 import { getImageKey } from '@/utils/helpers';
 
 @Injectable()

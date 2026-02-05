@@ -2,16 +2,17 @@ import { Module } from '@nestjs/common';
 import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
 import Keyv from 'keyv';
 import KeyvRedis from '@keyv/redis';
-import { ConfigService } from '@/config/config.service';
-import { AppConfigModule } from '@/config/config.module';
+import { ConfigService } from '@/common/services/config.service';
 import { UserCacheService } from './services/user-cache.service';
 import { RateLimitCacheService } from './services/rate-limit-cache.service';
 import { CacheHealthService } from './services/cache-health.service';
+import { CommonModule } from '@/common/common.module';
+import { TokenService } from './services/token.service';
 
 @Module({
   imports: [
     NestCacheModule.registerAsync({
-      imports: [AppConfigModule],
+      imports: [CommonModule],
       inject: [ConfigService],
       isGlobal: true,
       useFactory: async (configService: ConfigService) => {
@@ -29,7 +30,7 @@ import { CacheHealthService } from './services/cache-health.service';
       },
     }),
   ],
-  providers: [UserCacheService, RateLimitCacheService, CacheHealthService],
-  exports: [UserCacheService, RateLimitCacheService, CacheHealthService],
+  providers: [UserCacheService, RateLimitCacheService, CacheHealthService, TokenService],
+  exports: [UserCacheService, RateLimitCacheService, CacheHealthService, TokenService],
 })
-export class CacheModule {}
+export class CacheModule { }

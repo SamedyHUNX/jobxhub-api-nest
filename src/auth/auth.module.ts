@@ -6,17 +6,17 @@ import { S3Module } from '@/s3/s3.module';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt/jwt.strategy';
 import { InngestModule } from '@/inngest/inngest.module';
-import { ConfigService } from '@/config/config.service';
-import { AppConfigModule } from '@/config/config.module';
+import { ConfigService } from '@/common/services/config.service';
 import { CacheModule } from '@/cache/cache.module';
+import { CommonModule } from '@/common/common.module';
 
 @Module({
   imports: [
     S3Module,
     PassportModule,
     InngestModule,
-    AppConfigModule,
     CacheModule,
+    CommonModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
@@ -33,4 +33,4 @@ import { CacheModule } from '@/cache/cache.module';
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
 })
-export class AuthModule {}
+export class AuthModule { }

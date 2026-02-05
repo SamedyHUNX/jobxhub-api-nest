@@ -1,4 +1,3 @@
-import { DrizzleService } from '@/drizzle/services/drizzle.service';
 import {
   BadRequestException,
   ConflictException,
@@ -12,17 +11,19 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SignInDto, SignUpDto } from './dtos/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
-import { capitalizeString, hashPassword } from '@/utils/helpers';
+import { capitalizeString } from '@/utils/helpers';
 import * as crypto from 'crypto';
-import * as bcrypt from 'bcrypt';
 import { UserTable } from '@/drizzle/schema';
-import { ConfigService } from '@/config/config.service';
+import { ConfigService } from '@/common/services/config.service';
 import * as Sentry from '@sentry/nestjs';
 import { UserCacheService } from '@/cache/services/user-cache.service';
 import { RateLimitCacheService } from '@/cache/services/rate-limit-cache.service';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
+import { HashingService } from '@/common/services/hashing.service';
+import { User } from '@/types';
+import { TokenService } from '@/cache/services/token.service';
 
 @Injectable()
 export class AuthService {
@@ -30,13 +31,14 @@ export class AuthService {
   constructor(
     private userCacheService: UserCacheService,
     private jwtService: JwtService,
-    private dbService: DrizzleService,
+    private hashingService: HashingService,
     private s3Health: S3HealthService,
     private configService: ConfigService,
     private rateLimitCacheService: RateLimitCacheService,
     private inngestHealth: InngestHealthService,
     private dbHealth: DrizzleHealthService,
-  ) {}
+    private readonly tokenService: TokenService,
+  ) { }
 
   private get inngest() {
     return this.inngestHealth.getInngest();
@@ -51,44 +53,45 @@ export class AuthService {
   }
 
   private get s3() {
-    return this.s3Health.getS3();
+    return this.s3Health.s3;
   }
 
   private generateToken(payload: any) {
     return this.jwtService.sign(payload);
   }
 
-  private async generateAndHashToken(expireMinutes: number) {
-    const token = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    const expiresAt = new Date(Date.now() + expireMinutes * 60 * 1000);
-    return { token, hashedToken, expiresAt };
+  private get userCache() {
+    return this.userCacheService;
+  }
+
+  private get rateLimitCache() {
+    return this.rateLimitCacheService;
   }
 
   private async getCachedUser(email: string) {
-    return await this.userCacheService.getUserByEmail(email);
+    return await this.userCache.getUserByEmail(email);
   }
 
   private async getCachedUserById(userId: string) {
-    return await this.userCacheService.getUserById(userId);
+    return await this.userCache.getUserById(userId);
   }
 
   private async cacheUser(user: any) {
-    await this.userCacheService.setUser(user);
+    await this.userCache.setUser(user);
   }
 
   private async clearCachedUser(user: any) {
-    await this.userCacheService.clearUser(user);
+    await this.userCache.clearUser(user);
   }
 
   // Helper method to invalidate user cache
   private async invalidateUserCache(email: string, userId: string) {
-    await this.userCacheService.invalidateUser(email, userId);
+    await this.userCache.invalidateUser(email, userId);
   }
 
   // Invalidate all sessions (force re-login on all devices)
   private async invalidateAllUserSessions(userId: string) {
-    await this.userCacheService.invalidateAllSessions(userId);
+    await this.userCache.invalidateAllSessions(userId);
   }
 
   private addConstantTimeDelay = async (startTime: number) => {
@@ -104,6 +107,14 @@ export class AuthService {
     if (delay > 0) {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
+  };
+
+  private hashPassword = async (password: string) => {
+    return await this.hashingService.hash(password);
+  };
+
+  private verifyPassword = async (password: string, storedPassword: string) => {
+    return await this.hashingService.verify(storedPassword, password);
   };
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,19 +135,6 @@ export class AuthService {
       dateOfBirth,
       phoneNumber,
     } = data;
-
-    // Validate required fields
-    if (
-      !username ||
-      !password ||
-      !email ||
-      !firstName ||
-      !lastName ||
-      !dateOfBirth ||
-      !phoneNumber
-    ) {
-      throw new BadRequestException('All fields are required');
-    }
 
     if (!imageFile) {
       throw new BadRequestException('Profile image is required');
@@ -165,7 +163,7 @@ export class AuthService {
     );
 
     try {
-      const hashedPassword = await hashPassword(password);
+      const hashedPassword = await this.hashPassword(password);
       const capitalizedFirstName = capitalizeString(firstName);
       const capitalizedLastName = capitalizeString(lastName);
 
@@ -173,7 +171,7 @@ export class AuthService {
         token: verificationToken,
         hashedToken: hashedVerificationToken,
         expiresAt: verificationExpires,
-      } = await this.generateAndHashToken(60 * 24);
+      } = await this.tokenService.generateAndHashToken(60 * 24);
 
       const frontendUrl = this.configService.publicUrl;
       const locale = acceptLanguage || 'en';
@@ -200,7 +198,7 @@ export class AuthService {
             password: hashedPassword,
             phoneNumber,
             imageUrl,
-            userRole: 'USER',
+            userRole: 'USER', // For security
             verificationToken: hashedVerificationToken,
             verificationExpires: verificationExpires,
           })
@@ -222,19 +220,26 @@ export class AuthService {
       }
 
       try {
-        await this.inngest.send({
+        this.logger.log(`Sending Inngest event for user signup: ${user.email} (${user.id})`);
+        const eventData = {
+          userId: user.id,
+          email: user.email,
+          name: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          imageUrl: user.imageUrl,
+          verificationUrl,
+          acceptLanguage: locale,
+        };
+        this.logger.debug(`Inngest event data: ${JSON.stringify(eventData, null, 2)}`);
+
+        const result = await this.inngest.send({
           name: 'jobxhub/user.created',
-          data: {
-            userId: user.id,
-            email: user.email,
-            name: user.username,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            imageUrl: user.imageUrl,
-            verificationUrl,
-            acceptLanguage: locale,
-          },
+          data: eventData,
         });
+
+        this.logger.log(`Inngest event sent successfully for user: ${user.email} (${user.id})`);
+        this.logger.debug(`Inngest send result: ${JSON.stringify(result, null, 2)}`);
       } catch (inngestError: any) {
         // Rollback: Delete the user we just created
         await this.db.delete(UserTable).where(eq(UserTable.id, user.id));
@@ -242,25 +247,33 @@ export class AuthService {
         // Delete the uploaded image
         await this.s3.deleteFile(imageKey);
 
+        const errorMessage = inngestError?.message || inngestError?.toString() || 'Unknown error';
+        const errorStack = inngestError?.stack || 'No stack trace available';
+
+        this.logger.error(
+          `Failed to emit user.created event for user: ${user.email} (${user.id})`,
+          errorStack,
+        );
+
         Sentry.captureException(inngestError, {
+          tags: {
+            operation: 'signup_inngest_failed',
+          },
           extra: {
             userId: user.id,
             email: user.email,
             context: 'signup_inngest_failed',
+            errorMessage,
+            errorStack,
           },
         });
 
-        this.logger.error(
-          `Failed to emit user.created event: ${inngestError?.message ?? inngestError}`,
-        );
         throw new InternalServerErrorException(
           'Failed to complete signup. Please try again',
         );
       }
 
-      return {
-        message: 'User signed up successfully. Please verify your email.',
-      };
+      return true
     } catch (error) {
       // Cleanup orphaned file
       this.logger.warn(
@@ -351,7 +364,7 @@ export class AuthService {
             userId: user.id,
             email: user.email,
           },
-        });
+        })
       } catch (inngestError) {
         // Don't fail verification if event fails, just log it
         Sentry.captureException(inngestError, {
@@ -366,9 +379,7 @@ export class AuthService {
         );
       }
 
-      return {
-        message: 'Email verified successfully',
-      };
+      return true
     } catch (error) {
       Sentry.captureException(error, {
         extra: {
@@ -391,30 +402,30 @@ export class AuthService {
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   // Sign In
-  async signIn(data: SignInDto, ipAddress: string) {
+  async signIn(data: SignInDto, ipAddress: string, user: User) {
+    if (user) {
+      throw new UnauthorizedException('User already signed in');
+    }
     const { email, password } = data;
     const startTime = Date.now();
-
-    if (!email || !password) {
-      throw new BadRequestException('Email and password are required');
-    }
 
     try {
       if (this.configService.isProduction) {
         // 1. Check IP-based rate limiting (global protection)
-        await this.checkIpRateLimit(ipAddress);
+        await this.rateLimitCache.checkIpRateLimit(ipAddress);
 
         // 2. Check email-based rate limiting (account protection)
-        await this.checkEmailRateLimit(email);
-      }
+        await this.rateLimitCache.checkEmailRateLimit(email);
 
-      // 3. Check for account lockout
-      const isLocked = await this.isAccountLocked(email);
-      if (isLocked) {
-        await this.addConstantTimeDelay(startTime);
-        throw new UnauthorizedException(
-          'Account temporarily locked due to multiple failed login attempts. Please try again later or reset your password.',
-        );
+        // 3. Check for account lockout
+        const isLocked = await this.rateLimitCache.isAccountLocked(email);
+
+        if (isLocked) {
+          await this.addConstantTimeDelay(startTime);
+          throw new UnauthorizedException(
+            'Account temporarily locked due to multiple failed login attempts. Please try again later or reset your password.',
+          );
+        }
       }
 
       const cachedUser = await this.getCachedUser(email);
@@ -423,6 +434,7 @@ export class AuthService {
       let passwordHash: string;
 
       if (cachedUser) {
+        // Get user from cache
         user = cachedUser;
 
         const [dbStatus] = await this.db
@@ -438,7 +450,7 @@ export class AuthService {
           .limit(1);
 
         if (!dbStatus) {
-          await this.handleFailedLogin(email, ipAddress, 'user_not_found');
+          await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'user_not_found');
           await this.addConstantTimeDelay(startTime);
           throw new UnauthorizedException('Invalid credentials');
         }
@@ -473,7 +485,7 @@ export class AuthService {
           .limit(1);
 
         if (!dbUser) {
-          await this.handleFailedLogin(email, ipAddress, 'user_not_found');
+          await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'user_not_found');
           await this.addConstantTimeDelay(startTime);
           throw new UnauthorizedException('Invalid credentials');
         }
@@ -501,16 +513,16 @@ export class AuthService {
         await this.cacheUser(user);
       }
 
-      const isPasswordValid = await bcrypt.compare(password, passwordHash);
+      const isPasswordValid = await this.verifyPassword(password, passwordHash);
 
       if (!isPasswordValid) {
-        await this.handleFailedLogin(email, ipAddress, 'invalid_password');
+        await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'invalid_password');
         await this.addConstantTimeDelay(startTime);
         throw new UnauthorizedException('Invalid credentials');
       }
 
       // Successful login - clear failed attempts
-      await this.clearFailedAttempts(email, ipAddress);
+      await this.rateLimitCache.clearFailedAttempts(email, ipAddress);
 
       const payload = {
         email: user.email,
@@ -525,9 +537,7 @@ export class AuthService {
 
       await this.addConstantTimeDelay(startTime);
 
-      return {
-        token,
-      };
+      return token
     } catch (error) {
       // Capture security-related errors in Sentry
       if (error instanceof UnauthorizedException) {
@@ -556,157 +566,6 @@ export class AuthService {
 
       throw error;
     }
-  }
-
-  /**
-   * Check IP-based rate limiting
-   * Prevents distributed brute force attacks
-   */
-  private async checkIpRateLimit(ipAddress: string): Promise<void> {
-    const attempts =
-      await this.rateLimitCacheService.incrementEmailAttempts(ipAddress);
-
-    // Allow 10 attempts per IP per hour
-    if (attempts >= 3) {
-      this.logger.warn(`IP rate limit exceeded: ${ipAddress}`);
-
-      Sentry.captureMessage('IP rate limit exceeded on login', {
-        level: 'warning',
-        tags: {
-          operation: 'sign_in',
-          rate_limit_type: 'ip',
-        },
-        extra: {
-          ipAddress,
-          attempts,
-        },
-      });
-
-      throw new HttpException(
-        'Too many login attempts from this IP address. Please try again later.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-  }
-
-  /**
-   * Check email-based rate limiting
-   * Prevents targeted attacks on specific accounts
-   */
-  private async checkEmailRateLimit(email: string): Promise<void> {
-    const attempts =
-      await this.rateLimitCacheService.incrementEmailAttempts(email);
-
-    // Allow 5 attempts per email per 15 minutes
-    if (attempts >= 5) {
-      this.logger.warn(`Email rate limit exceeded: ${email}`);
-
-      Sentry.captureMessage('Email rate limit exceeded on login', {
-        level: 'warning',
-        tags: {
-          operation: 'sign_in',
-          rate_limit_type: 'email',
-        },
-        extra: {
-          email,
-          attempts,
-        },
-      });
-
-      throw new HttpException(
-        'Too many login attempts for this account. Please try again later or reset your password.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-  }
-
-  /**
-   * Check if account is locked due to failed attempts
-   * Implements progressive lockout
-   */
-  private async isAccountLocked(email: string): Promise<boolean> {
-    return await this.rateLimitCacheService.isAccountLocked(email);
-  }
-
-  /**
-   * Handle failed login attempts with progressive lockout
-   */
-  private async handleFailedLogin(
-    email: string,
-    ipAddress: string,
-    reason: string,
-  ): Promise<void> {
-    const newAttempts =
-      await this.rateLimitCacheService.incrementFailedAttempts(email);
-
-    // Log failed attempt
-    this.logger.warn(
-      `Failed login attempt ${newAttempts} for ${email} from ${ipAddress}. Reason: ${reason}`,
-    );
-
-    // Progressive lockout strategy
-    if (newAttempts >= 10) {
-      const lockDuration = 3600 * 1000;
-      await this.rateLimitCacheService.lockAccount(
-        email,
-        newAttempts,
-        lockDuration,
-      );
-
-      Sentry.captureMessage('Account locked - excessive failed attempts', {
-        level: 'error',
-        tags: {
-          operation: 'sign_in',
-          security_event: 'account_locked',
-        },
-        extra: {
-          email,
-          ipAddress,
-          attempts: newAttempts,
-          lockDuration: '1 hour',
-        },
-      });
-    } else if (newAttempts >= 7) {
-      // 7-9 attempts: Lock for 15 minutes
-      const lockDuration = 900 * 1000;
-      await this.rateLimitCacheService.lockAccount(
-        email,
-        newAttempts,
-        lockDuration,
-      );
-    } else if (newAttempts >= 5) {
-      // 5-6 attempts: Lock for 5 minutes
-      const lockDuration = 300 * 1000;
-      await this.rateLimitCacheService.lockAccount(
-        email,
-        newAttempts,
-        lockDuration,
-      );
-
-      Sentry.captureMessage('Account temporarily locked', {
-        level: 'warning',
-        tags: {
-          operation: 'sign_in',
-          security_event: 'temp_lock',
-        },
-        extra: {
-          email,
-          ipAddress,
-          attempts: newAttempts,
-        },
-      });
-    }
-  }
-
-  /**
-   * Clear failed login attempts on successful login
-   */
-  private async clearFailedAttempts(
-    email: string,
-    ipAddress: string,
-  ): Promise<void> {
-    await this.rateLimitCacheService.clearFailedAttempts(email);
-    this.logger.log(`Cleared failed attempts for ${email}`);
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -783,7 +642,7 @@ export class AuthService {
     try {
       // 1. Rate limit by IP (global)
       const ipAttempts =
-        await this.rateLimitCacheService.incrementPasswordResetIpAttempts(
+        await this.rateLimitCache.incrementPasswordResetIpAttempts(
           ipAddress,
         );
 
@@ -803,7 +662,7 @@ export class AuthService {
 
       // 2. Rate limit by email
       const emailAttempts =
-        await this.rateLimitCacheService.incrementPasswordResetEmailAttempts(
+        await this.rateLimitCache.incrementPasswordResetEmailAttempts(
           email,
         );
       const emailRateLimited = emailAttempts > 3;
@@ -829,7 +688,7 @@ export class AuthService {
         token: resetToken,
         hashedToken,
         expiresAt,
-      } = await this.generateAndHashToken(15);
+      } = await this.tokenService.generateAndHashToken(15);
 
       // Update database if user exists and should send email
       if (shouldSendEmail) {
@@ -862,7 +721,11 @@ export class AuthService {
               acceptLanguage,
             },
           })
+          .then(() => {
+            this.logger.log(`Successfully queued password reset email for ${email}`);
+          })
           .catch((error) => {
+            this.logger.error(`Failed to queue password reset email for ${email}:`, error);
             Sentry.captureException(error, {
               tags: {
                 operation: 'password_reset',
@@ -873,7 +736,6 @@ export class AuthService {
                 acceptLanguage,
               },
             });
-            this.logger.error('Failed to send password reset email', error);
           });
       }
 
@@ -913,9 +775,7 @@ export class AuthService {
       await this.addConstantTimeDelay(startTime);
 
       // Always return same response
-      return {
-        message: 'Password reset email sent. Please check your inbox',
-      };
+      return true
     } catch (error) {
       // Capture unexpected errors in Sentry
       if (!(error instanceof HttpException)) {
@@ -970,7 +830,7 @@ export class AuthService {
     }
 
     // Hash new password
-    const hashedPassword = await hashPassword(newPassword);
+    const hashedPassword = await this.hashingService.hash(newPassword);
 
     // Update user's password and clear reset token fields
     await this.db
@@ -990,9 +850,7 @@ export class AuthService {
     await this.invalidateAllUserSessions(user.id);
 
     this.logger.log(`Password successfully reset for user ID: ${user.id}`);
-    return {
-      message: 'Password reset successfully',
-    };
+    return true
   };
 
   async signOut(userId: string) {
@@ -1010,9 +868,7 @@ export class AuthService {
 
       if (!user) {
         this.logger.warn(`Sign out attempted for non-existent user: ${userId}`);
-        return {
-          message: 'Signed out successfully',
-        };
+        return true
       }
 
       // 2. Increment token version to invalidate all existing tokens
@@ -1034,11 +890,8 @@ export class AuthService {
         `User ${user.email} (ID: ${userId}) signed out successfully`,
       );
 
-      return {
-        message: 'Signed out successfully',
-      };
+      return true
     } catch (error) {
-      // Log error but don't fail the sign-out
       Sentry.captureException(error, {
         tags: {
           operation: 'sign_out',
@@ -1050,10 +903,8 @@ export class AuthService {
 
       this.logger.error(`Sign out error for user ${userId}: ${error?.message}`);
 
-      // Still return success - user experience is more important
-      return {
-        message: 'Signed out successfully',
-      };
+      // Still return success
+      return true
     }
   }
 }

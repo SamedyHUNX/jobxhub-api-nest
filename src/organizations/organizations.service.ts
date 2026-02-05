@@ -1,10 +1,9 @@
-import { ConfigService } from '@/config/config.service';
-import { DrizzleService } from '@/drizzle/services/drizzle.service';
-import { S3Service } from '@/s3/services/s3.service';
+import { ConfigService } from '@/common/services/config.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -19,8 +18,11 @@ import {
   UserTable,
 } from '@/drizzle/schema';
 import type { Cache } from 'cache-manager';
-import { and, eq, like, or } from 'drizzle-orm';
+import { and, eq, like, or, SQL } from 'drizzle-orm';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
+import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
+import { S3HealthService } from '@/s3/services/s3-health.service';
+import { CacheHealthService } from '@/cache/services/cache-health.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -28,20 +30,15 @@ export class OrganizationsService {
 
   constructor(
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-    private dbService: DrizzleService,
-    private s3Service: S3Service,
+    private dbHealth: DrizzleHealthService,
+    private s3Health: S3HealthService,
     private readonly configService: ConfigService,
     private inngestHealth: InngestHealthService,
-  ) {}
+    private cacheHealth: CacheHealthService,
+  ) { }
 
-  private get redisCache() {
-    if (!this.cacheManager) {
-      const message = `Redis server is down at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Cache service unavailable');
-    }
-    return this.cacheManager;
+  private get cache() {
+    return this.cacheHealth.getValidatedCache();
   }
 
   private get inngest() {
@@ -52,63 +49,62 @@ export class OrganizationsService {
     return new Date().toISOString();
   }
 
-  private get dbServer() {
-    if (!this.dbService.db) {
-      const message = `Database connection not established at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Database unavailable');
-    }
-    return this.dbService.db;
+  private get db() {
+    return this.dbHealth.getDb();
   }
 
-  private get s3Server() {
-    if (!this.s3Service) {
-      const message = `S3 service is down at ${this.getTimestamp()}`;
-      this.logger.error(message);
-      Sentry.captureException(new Error(message));
-      throw new InternalServerErrorException('Storage service unavailable');
-    }
-    return this.s3Service;
+  private get s3() {
+    return this.s3Health.s3;
   }
 
   // Get all orgs with optional filtering
-  findAll = async (search?: string, isVerified?: boolean) => {
-    const cacheKey = `orgs:all${search ? `:search:${search}` : ''}${isVerified !== undefined ? `:verified:${isVerified}` : ''}`;
+  findAll = async (userId: string, search?: string, isVerified?: boolean) => {
+    const cacheKey = `orgs:all${search ? `:search:${search}` : ''}${isVerified !== undefined ? `:verified:${isVerified}` : ''}${userId ? `:user:${userId}` : ''}`;
 
-    const cached = await this.redisCache.get(cacheKey);
+    const cached = await this.cache.get(cacheKey);
     if (cached) return cached;
 
-    const baseQuery = this.dbServer.select().from(OrganizationTable);
+    // Build conditions array for OrganizationTable only
+    const conditions: SQL<unknown>[] = [];
+
+    if (search) {
+      conditions.push(like(OrganizationTable.orgName, `%${search}%`));
+    }
+
+    if (isVerified !== undefined) {
+      conditions.push(eq(OrganizationTable.isVerified, isVerified));
+    }
 
     let organizations;
 
-    if (search && isVerified !== undefined) {
-      organizations = await baseQuery.where(
-        and(
-          like(OrganizationTable.orgName, `%${search}%`),
-          eq(OrganizationTable.isVerified, isVerified),
-        ),
-      );
-    } else if (search) {
-      organizations = await baseQuery.where(
-        like(OrganizationTable.orgName, `%${search}%`),
-      );
-    } else if (isVerified !== undefined) {
-      organizations = await baseQuery.where(
-        eq(OrganizationTable.isVerified, isVerified),
-      );
+    // If filtering by userId, use join query
+    if (userId) {
+      const result = await this.db
+        .select()
+        .from(OrganizationTable)
+        .innerJoin(
+          OrganizationUserSettingsTable,
+          eq(OrganizationTable.id, OrganizationUserSettingsTable.organizationId)
+        )
+        .where(
+          and(
+            eq(OrganizationUserSettingsTable.userId, userId),
+            conditions.length > 0 ? and(...conditions) : undefined
+          )
+        );
+
+      // Extract just the organization objects from the join result
+      organizations = result.map(row => row.organizations);
     } else {
-      organizations = await baseQuery;
+      // No join needed
+      organizations = await this.db
+        .select()
+        .from(OrganizationTable)
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
     }
 
-    const result = {
-      message: 'Organizations fetched successfully',
-      data: { organizations },
-    };
-
-    await this.redisCache.set(cacheKey, result, 300); // 5 min (300 seconds)
-    return result;
+    await this.cache.set(cacheKey, organizations, 300);
+    return organizations;
   };
 
   // Create an organization
@@ -117,16 +113,33 @@ export class OrganizationsService {
     imageFile: Express.Multer.File,
     userId: string,
   ) => {
-    const { orgName, slug } = data;
+    const { orgName, orgDescription, orgSlug } = data;
+
+    // Limit to 5 organizations per account
+    const userOrganizations = await this.db
+      .select()
+      .from(OrganizationUserSettingsTable)
+      .where(
+        and(
+          eq(OrganizationUserSettingsTable.userId, userId),
+          eq(OrganizationUserSettingsTable.role, 'OWNER'),
+        ),
+      );
+
+    if (userOrganizations.length >= 5) {
+      throw new ForbiddenException(
+        'You have reached the maximum limit of 5 organizations per account',
+      );
+    }
 
     // Check if organization with same orgName or slug already exists
-    const existingOrg = await this.dbServer
+    const existingOrg = await this.db
       .select()
       .from(OrganizationTable)
       .where(
         or(
           eq(OrganizationTable.orgName, orgName),
-          eq(OrganizationTable.slug, slug),
+          eq(OrganizationTable.slug, orgSlug),
         ),
       )
       .limit(1);
@@ -135,13 +148,13 @@ export class OrganizationsService {
       if (existingOrg[0].orgName === orgName) {
         throw new ConflictException('Organization name already exists');
       }
-      if (existingOrg[0].slug === slug) {
+      if (existingOrg[0].slug === orgSlug) {
         throw new ConflictException('Organization slug already taken');
       }
     }
 
     const { key: imageKey, url: imageUrl } =
-      await this.s3Server.uploadFileAndGetUrl(
+      await this.s3.uploadFileAndGetUrl(
         imageFile,
         'organizations',
         'logos',
@@ -152,18 +165,20 @@ export class OrganizationsService {
 
       try {
         // Create organization
-        [organization] = await this.dbServer
+        [organization] = await this.db
           .insert(OrganizationTable)
           .values({
             orgName,
             imageUrl,
-            slug,
+            description: orgDescription,
+            slug: orgSlug,
+            membersCount: 1,
             createdBy: userId,
           })
           .returning();
       } catch (dbError: any) {
         // Cleanup uploaded file if database insert fails
-        await this.s3Server.deleteFile(imageKey);
+        await this.s3.deleteFile(imageKey);
 
         // Handle unique constraint violation
         if (dbError.code === '23505') {
@@ -178,20 +193,21 @@ export class OrganizationsService {
       }
 
       try {
-        // Assign the creator as a member of the organization
-        await this.dbServer.insert(OrganizationUserSettingsTable).values({
+        // Assign the creator as an owner of the organization
+        await this.db.insert(OrganizationUserSettingsTable).values({
           userId,
           organizationId: organization.id,
           newApplicationEmailNotifications: false,
+          role: 'OWNER'
         });
       } catch (settingsError: any) {
         // Rollback: Delete the organization we just created
-        await this.dbServer
+        await this.db
           .delete(OrganizationTable)
           .where(eq(OrganizationTable.id, organization.id));
 
         // Delete the uploaded image
-        await this.s3Server.deleteFile(imageKey);
+        await this.s3.deleteFile(imageKey);
 
         this.logger.error(
           `Failed to create organization user settings: ${settingsError?.message ?? settingsError}`,
@@ -205,16 +221,11 @@ export class OrganizationsService {
         `Organization created with ID: ${organization.id} and assigned to user: ${userId}`,
       );
 
-      return {
-        message: 'Organization created successfully',
-        data: {
-          organizations: organization,
-        },
-      };
+      return organization;
     } catch (error) {
       // Final cleanup for any uncaught errors
       this.logger.warn(`Operation failed. Deleting orphaned file: ${imageKey}`);
-      await this.s3Server
+      await this.s3
         .deleteFile(imageKey)
         .catch((e) =>
           this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),
@@ -230,7 +241,7 @@ export class OrganizationsService {
       throw new BadRequestException('No userId provided');
     }
 
-    const [user] = await this.dbServer
+    const [user] = await this.db
       .select({ id: UserTable.id })
       .from(UserTable)
       .where(eq(UserTable.id, userId))
@@ -241,7 +252,7 @@ export class OrganizationsService {
       throw new NotFoundException('User not found');
     }
 
-    const orgs = await this.dbServer
+    const orgs = await this.db
       .select()
       .from(OrganizationTable)
       .innerJoin(
@@ -259,12 +270,7 @@ export class OrganizationsService {
     // Extract only the organization data from the join result
     const organizations = orgs.map((item) => item.organizations);
 
-    return {
-      message: 'Organizations fetched successfully',
-      data: {
-        organizations,
-      },
-    };
+    return organizations;
   };
 
   // Get a single organization by ID
@@ -274,7 +280,7 @@ export class OrganizationsService {
       throw new BadRequestException('No orgId provided');
     }
 
-    const [org] = await this.dbServer
+    const [org] = await this.db
       .select()
       .from(OrganizationTable)
       .where(eq(OrganizationTable.id, orgId))
@@ -287,11 +293,29 @@ export class OrganizationsService {
       );
     }
 
-    return {
-      message: 'Organizations fetched successfully',
-      data: {
-        organizations: org,
-      },
-    };
+    return org;
+  };
+
+  // Get selected organization by ID
+  findSelected = async (orgId: string) => {
+    if (!orgId) {
+      this.logger.error('Missing orgId');
+      throw new BadRequestException('No orgId provided');
+    }
+
+    const [org] = await this.db
+      .select()
+      .from(OrganizationTable)
+      .where(eq(OrganizationTable.id, orgId))
+      .limit(1);
+
+    if (!org) {
+      this.logger.error(`Organization with ID ${orgId} not found`);
+      throw new NotFoundException(
+        'No organizations found. Please consider creating one',
+      );
+    }
+
+    return org;
   };
 }

@@ -1,40 +1,80 @@
 import { AuthService } from '@/auth/auth.service';
 import { DrizzleService } from '@/drizzle/services/drizzle.service';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
   ConflictException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { UpdatedMeDataDto } from './dtos/update-me.dto';
 import { UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
-import type { Cache } from 'cache-manager';
 import { S3HealthService } from '@/s3/services/s3-health.service';
+import { UserCacheService } from '@/cache/services/user-cache.service';
+import { Permissions } from '@/utils/rbac/permissions';
+import { PermissionService } from '@/common/services/permission.service';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(AuthService.name);
   constructor(
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-    private jwtService: JwtService,
     private dbService: DrizzleService,
     private s3Health: S3HealthService,
-  ) {}
+    private userCacheService: UserCacheService,
+    private readonly permission: PermissionService
+  ) { }
 
   private getTimestamp(): string {
     return new Date().toISOString();
   }
 
-  private get s3() {
-    return this.s3Health.getS3();
+  private get userCache() {
+    return this.userCacheService;
   }
 
-  updateMe = async (
+
+  private get s3() {
+    return this.s3Health.s3;
+  }
+
+  getAll = async (userId: string, userRole: string) => {
+    if (!this.permission.hasAppPermission(userRole, Permissions.FETCH_ALL_USERS)) {
+      throw new UnauthorizedException('You cannot access this feature')
+    }
+
+    try {
+      const users = await this.dbService.db
+        .select({
+          id: UserTable.id,
+          email: UserTable.email,
+          firstName: UserTable.firstName,
+          lastName: UserTable.lastName,
+          username: UserTable.username,
+          imageUrl: UserTable.imageUrl,
+          userRole: UserTable.userRole,
+          phoneNumber: UserTable.phoneNumber,
+          dateOfBirth: UserTable.dateOfBirth,
+          createdAt: UserTable.createdAt,
+          updatedAt: UserTable.updatedAt,
+        })
+        .from(UserTable)
+        .where(not(eq(UserTable.id, userId)))
+        .limit(10);
+
+
+      if (!users || users.length === 0) {
+        throw new NotFoundException('Users not found');
+      }
+
+      return users;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  update = async (
     userId: string,
     data: UpdatedMeDataDto,
     imageFile?: Express.Multer.File,
@@ -91,6 +131,8 @@ export class UsersService {
           'avatars',
         );
 
+        console.log('diddy', url)
+
         uploadedImageKey = key; // Track for cleanup
         updateData.imageUrl = url;
       }
@@ -133,20 +175,14 @@ export class UsersService {
       }
 
       // Invalidate cache for this user using the same keys as auth.service
-      await this.cacheManager.del(`user:id:${userId}`);
-      await this.cacheManager.del(`user:email:${updatedUser.email}`);
+      await this.userCache.invalidateUser(updatedUser.email, updatedUser.id);
 
       // Remove password from response
       const { password, ...userWithoutPassword } = updatedUser;
 
       this.logger.log(`User ${userId} updated their profile`);
 
-      return {
-        message: 'Updated user successfully',
-        data: {
-          users: userWithoutPassword,
-        },
-      };
+      return userWithoutPassword;
     } catch (error) {
       // Cleanup uploaded image if something went wrong
       if (uploadedImageKey) {

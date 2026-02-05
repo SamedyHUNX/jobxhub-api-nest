@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { CacheHealthService } from './cache-health.service';
+import * as Sentry from '@sentry/nestjs';
+
 
 interface AccountLockData {
   lockedUntil: number;
@@ -10,7 +12,7 @@ interface AccountLockData {
 export class RateLimitCacheService {
   private readonly logger = new Logger(RateLimitCacheService.name);
 
-  constructor(private readonly cacheHealth: CacheHealthService) {}
+  constructor(private readonly cacheHealth: CacheHealthService) { }
 
   private get cache() {
     return this.cacheHealth.getValidatedCache();
@@ -38,7 +40,7 @@ export class RateLimitCacheService {
   async incrementIpAttempts(
     ipAddress: string,
     ttlMs: number = 3600 * 1000,
-    action: string = 'login',
+    action: string = 'signin', // Fixed: changed from 'login' to match getIpAttempts default
   ): Promise<number> {
     const key = `${action}_ip:${ipAddress}`;
     const current = await this.getIpAttempts(ipAddress, action);
@@ -182,11 +184,13 @@ export class RateLimitCacheService {
     }
   }
 
-  async clearFailedAttempts(email: string): Promise<void> {
+  async clearFailedAttempts(email: string, ipAddress: string): Promise<void> {
     try {
       await Promise.all([
         this.cache.del(`failed_login:${email}`),
         this.cache.del(`account_lock:${email}`),
+        this.cache.del(`pwd_reset_ip:${ipAddress}`),
+        this.cache.del(`pwd_reset_email:${email}`),
       ]);
       this.logger.log(`Cleared failed attempts for ${email}`);
     } catch (error) {
@@ -237,5 +241,132 @@ export class RateLimitCacheService {
     ttlMs: number = 3600 * 1000,
   ): Promise<number> {
     return this.incrementEmailAttempts(email, 'pwd_reset', ttlMs);
+  }
+
+  async checkEmailRateLimit(email: string): Promise<void> {
+    const attempts = await this.incrementEmailAttempts(email);
+
+    // Allow 5 attempts per email per 15 minutes
+    if (attempts >= 5) {
+      this.logger.warn(`Email rate limit exceeded: ${email}`);
+
+      Sentry.captureMessage('Email rate limit exceeded on login', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          rate_limit_type: 'email',
+        },
+        extra: {
+          email,
+          attempts,
+        },
+      });
+
+      throw new HttpException(
+        'Too many login attempts for this account. Please try again later or reset your password.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  /**
+   * Handle failed login attempts with progressive lockout
+   */
+  async handleFailedLogin(
+    email: string,
+    ipAddress: string,
+    reason: string,
+  ): Promise<void> {
+    const newAttempts =
+      await this.incrementFailedAttempts(email);
+
+    // Log failed attempt
+    this.logger.warn(
+      `Failed login attempt ${newAttempts} for ${email} from ${ipAddress}. Reason: ${reason}`,
+    );
+
+    // Progressive lockout strategy
+    if (newAttempts >= 10) {
+      const lockDuration = 3600 * 1000;
+      await this.lockAccount(
+        email,
+        newAttempts,
+        lockDuration,
+      );
+
+      Sentry.captureMessage('Account locked - excessive failed attempts', {
+        level: 'error',
+        tags: {
+          operation: 'sign_in',
+          security_event: 'account_locked',
+        },
+        extra: {
+          email,
+          ipAddress,
+          attempts: newAttempts,
+          lockDuration: '1 hour',
+        },
+      });
+    } else if (newAttempts >= 7) {
+      // 7-9 attempts: Lock for 15 minutes
+      const lockDuration = 900 * 1000;
+      await this.lockAccount(
+        email,
+        newAttempts,
+        lockDuration,
+      );
+    } else if (newAttempts >= 5) {
+      // 5-6 attempts: Lock for 5 minutes
+      const lockDuration = 300 * 1000;
+      await this.lockAccount(
+        email,
+        newAttempts,
+        lockDuration,
+      );
+
+      Sentry.captureMessage('Account temporarily locked', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          security_event: 'temp_lock',
+        },
+        extra: {
+          email,
+          ipAddress,
+          attempts: newAttempts,
+        },
+      });
+    }
+  }
+
+  /**
+   * Check IP-based rate limiting
+   * Prevents distributed brute force attacks
+   */
+  async checkIpRateLimit(ipAddress: string): Promise<void> {
+    const attempts =
+      await this.incrementEmailAttempts(ipAddress);
+
+    // Allow 10 attempts per IP per hour
+    if (attempts >= 3) {
+      this.logger.warn(`IP rate limit exceeded: ${ipAddress}`);
+
+      Sentry.captureMessage('IP rate limit exceeded on login', {
+        level: 'warning',
+        tags: {
+          operation: 'sign_in',
+          rate_limit_type: 'ip',
+        },
+        extra: {
+          ipAddress,
+          attempts,
+        },
+      });
+
+      throw new HttpException(
+        'Too many login attempts from this IP address. Please try again later.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
   }
 }
