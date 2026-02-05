@@ -13,8 +13,8 @@ import { UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { UserCacheService } from '@/cache/services/user-cache.service';
-import { hasAppPermission } from '@/utils/rbac/authz';
 import { Permissions } from '@/utils/rbac/permissions';
+import { PermissionService } from '@/common/services/permission.service';
 
 @Injectable()
 export class UsersService {
@@ -23,6 +23,7 @@ export class UsersService {
     private dbService: DrizzleService,
     private s3Health: S3HealthService,
     private userCacheService: UserCacheService,
+    private readonly permission: PermissionService
   ) { }
 
   private getTimestamp(): string {
@@ -39,7 +40,7 @@ export class UsersService {
   }
 
   getAll = async (userId: string, userRole: string) => {
-    if (!hasAppPermission(userRole, Permissions.FETCH_ALL_USERS)) {
+    if (!this.permission.hasAppPermission(userRole, Permissions.FETCH_ALL_USERS)) {
       throw new UnauthorizedException('You cannot access this feature')
     }
 
