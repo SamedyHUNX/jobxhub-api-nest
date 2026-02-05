@@ -5,12 +5,13 @@ import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable } fro
 import { and, eq, like, or } from 'drizzle-orm';
 import type { User } from '@/types';
 import { PermissionService } from '@/common/services/permission.service';
+import { ConfigService } from '@/common/services/config.service';
 
 @Injectable()
 export class JobListingsService {
   private readonly logger = new Logger(JobListingsService.name);
 
-  constructor(private dbHealth: DrizzleHealthService, private permission: PermissionService) { }
+  constructor(private dbHealth: DrizzleHealthService, private permission: PermissionService, private readonly config: ConfigService) { }
 
   private get db() {
     return this.dbHealth.getDb();

@@ -4,7 +4,7 @@ import { ConfigService } from './common/services/config.service';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import './instrument';
-import { ValidationPipe } from '@nestjs/common';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   // Create the App
@@ -31,7 +31,12 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true,
+      exceptionFactory(errors) {
+        const messages = errors.map(
+          (err) => `${err.property} - ${Object.values(err.constraints || {}).join(', ')}`
+        )
+        return new BadRequestException(messages)
+      },
     }),
   );
 

@@ -15,6 +15,7 @@ import type {
 import {
   IsBoolean,
   IsDateString,
+  IsEmpty,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -77,5 +78,18 @@ export class CreateJobListingDto {
 }
 
 // Update DTO: all fields optional
-export class UpdateJobListingDto extends PartialType(CreateJobListingDto) { }
+export class UpdateJobListingDto extends PartialType(CreateJobListingDto) {
+  @IsEmpty()
+  id?: string;
+
+  @IsEmpty()
+  organizationId?: string;
+
+  @IsEmpty()
+  createdAt?: never;
+
+  @IsEmpty()
+  updatedAt?: never;
+}
+
 
