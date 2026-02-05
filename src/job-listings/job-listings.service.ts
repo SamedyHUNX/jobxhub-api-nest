@@ -112,6 +112,12 @@ export class JobListingsService {
         ? await baseQuery.where(and(...conditions))
         : await baseQuery;
 
-    return jobListings
+    // Flatten results
+    const flattened = jobListings.map((row) => ({
+      ...row.job_listings,
+      organization: row.organizations
+    }))
+
+    return flattened
   }
 }

@@ -47,9 +47,7 @@ export class JobListingsController {
 
     return {
       message: 'Job listings fetched successfully',
-      data: {
-        jobListings,
-      },
+      data: jobListings,
       statusCode: 200
     }
   }
