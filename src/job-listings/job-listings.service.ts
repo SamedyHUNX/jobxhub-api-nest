@@ -14,14 +14,15 @@ export class JobListingsService {
     return this.dbHealth.getDb();
   }
 
-  create = async (data: CreateJobListingDto, userId: string) => {
-    const { organizationId, ...jobData } = data;
+  create = async (data: CreateJobListingDto, userId: string, orgId: string) => {
+    console.log('hi', orgId)
+    const { ...jobData } = data;
 
     // Verify org exists
     const [org] = await this.db
       .select()
       .from(OrganizationTable)
-      .where(eq(OrganizationTable.id, organizationId));
+      .where(eq(OrganizationTable.id, orgId));
 
     if (!org) {
       throw new NotFoundException('The organization does not exist');
@@ -35,7 +36,7 @@ export class JobListingsService {
       .from(OrganizationUserSettingsTable)
       .where(
         and(
-          eq(OrganizationUserSettingsTable.organizationId, organizationId),
+          eq(OrganizationUserSettingsTable.organizationId, orgId),
           eq(OrganizationUserSettingsTable.userId, userId)
         )
       )
@@ -52,7 +53,7 @@ export class JobListingsService {
       .insert(JobListingTable)
       .values({
         ...jobData,
-        organizationId,
+        organizationId: orgId,
         status: data.status || 'draft',
         isFeatured: data.isFeatured || false,
         postedAt: data.postedAt ? new Date(data.postedAt) : new Date(),
@@ -60,7 +61,7 @@ export class JobListingsService {
       .returning();
 
     this.logger.log(
-      `Job listing created with ID: ${jobListing.id} for organization: ${organizationId} by user: ${userId}`,
+      `Job listing created with ID: ${jobListing.id} for organization: ${orgId} by user: ${userId}`,
     );
 
     return jobListing

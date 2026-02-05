@@ -13,6 +13,8 @@ import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { CreateJobListingDto } from './dtos/job-listings.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { User } from '@/types';
+import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
 
 @ApiTags('job-listings')
 @Controller('job-listings')
@@ -25,7 +27,7 @@ export class JobListingsController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   async findAll(
-    @CurrentUser() user: any,
+    @CurrentUser() user: User,
     @Query('search') search?: string,
     @Query('organizationId') organizationId?: string,
     @Query('status') status?: string,
@@ -33,26 +35,22 @@ export class JobListingsController {
     @Query('locationRequirement') locationRequirement?: string,
     @Query('experienceLevel') experienceLevel?: string,
   ) {
-    try {
-      const jobListings = await this.jobListingsService.findAll(
-        search,
-        organizationId,
-        status,
-        type,
-        locationRequirement,
-        experienceLevel,
-        user.id
-      );
+    const jobListings = await this.jobListingsService.findAll(
+      search,
+      organizationId,
+      status,
+      type,
+      locationRequirement,
+      experienceLevel,
+      user.id
+    );
 
-      return {
-        message: 'Job listings fetched successfully',
-        data: {
-          jobListings,
-        },
-        statusCode: 200
-      }
-    } catch (error) {
-      throw error
+    return {
+      message: 'Job listings fetched successfully',
+      data: {
+        jobListings,
+      },
+      statusCode: 200
     }
   }
 
@@ -64,20 +62,17 @@ export class JobListingsController {
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Body() createJobListingDto: CreateJobListingDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: User,
+    @SelectedOrgId() orgId: string,
   ) {
-    try {
-      const jobListing = await this.jobListingsService.create(createJobListingDto, user.id);
+    const jobListing = await this.jobListingsService.create(createJobListingDto, user.id, orgId);
 
-      return {
-        message: 'Job created successfully',
-        data: {
-          jobListings: [jobListing],
-        },
-        statusCode: 201
-      };
-    } catch (error) {
-      throw error
-    }
+    return {
+      message: 'Job created successfully',
+      data: {
+        jobListings: [jobListing],
+      },
+      statusCode: 201
+    };
   }
 }

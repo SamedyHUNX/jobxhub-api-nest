@@ -17,19 +17,13 @@ import {
   IsDateString,
   IsEnum,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   MaxLength,
   MinLength,
 } from 'class-validator';
 
 export class CreateJobListingDto {
-  @IsUUID()
-  @IsNotEmpty()
-  organizationId: string;
-
   @IsString()
   @IsNotEmpty()
   title: string;
