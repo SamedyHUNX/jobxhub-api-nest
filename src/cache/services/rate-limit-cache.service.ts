@@ -347,7 +347,7 @@ export class RateLimitCacheService {
     const attempts =
       await this.incrementEmailAttempts(ipAddress);
 
-    // Allow 10 attempts per IP per hour
+    // Allow 3 attempts per IP per hour
     if (attempts >= 3) {
       this.logger.warn(`IP rate limit exceeded: ${ipAddress}`);
 
@@ -364,7 +364,7 @@ export class RateLimitCacheService {
       });
 
       throw new HttpException(
-        'Too many login attempts from this IP address. Please try again later.',
+        'Too many signin attempts from this IP address. Please try again later.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
