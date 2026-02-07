@@ -1,6 +1,6 @@
 import { OrganizationUserSettingsTable } from '@/drizzle/schema';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
-import { AppRolePermissions, OrgRolePermissions } from '@/utils/rbac/roles';
+import { AppRolePermissions, OrgRolePermissions } from '@/utils/rbac/role-maps';
 import { Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 

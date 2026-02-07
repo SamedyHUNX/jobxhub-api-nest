@@ -3,7 +3,15 @@ import { ConfigService as NestConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ConfigService {
-  constructor(private configService: NestConfigService) {}
+  constructor(private configService: NestConfigService) { }
+
+  // Stripe
+  get stripeSecret(): string {
+    return this.configService.getOrThrow('STRIPE_SECRET_KEY')
+  }
+  get stripeWebhookSecret(): string {
+    return this.configService.getOrThrow('STRIPE_WEBHOOK_SECRET')
+  }
 
   // Database
   get dbUrl(): string {

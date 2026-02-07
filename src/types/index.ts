@@ -1,3 +1,5 @@
+import { Request } from 'express';
+
 export interface User {
     id: string;
     email: string;
@@ -10,4 +12,8 @@ export interface User {
     dateOfBirth: string;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface RawBodyRequest<T extends Request = Request> extends Request {
+    rawBody: Buffer;
 }
