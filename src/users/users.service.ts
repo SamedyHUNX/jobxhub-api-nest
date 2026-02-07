@@ -40,7 +40,7 @@ export class UsersService {
   }
 
   getAll = async (userId: string, userRole: string) => {
-    if (!this.permission.hasAppPermission(userRole, Permissions.FETCH_ALL_USERS)) {
+    if (!this.permission.hasAppPermission(userRole, Permissions.READ_ALL_USERS)) {
       throw new UnauthorizedException('You cannot access this feature')
     }
 
