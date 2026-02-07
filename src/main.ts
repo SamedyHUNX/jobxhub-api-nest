@@ -5,6 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import './instrument';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import bodyParser from 'body-parser';
 
 async function bootstrap() {
   // Create the App
@@ -50,6 +51,7 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
+  app.use('/stripe/webhook', bodyParser.raw({ type: 'application/json' }));
   // Start the server
   await app.listen(configService.port);
 }
