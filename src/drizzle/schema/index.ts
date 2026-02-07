@@ -9,3 +9,4 @@ export * from './Organizations';
 export * from './OrganizationUserSettings';
 export * from './JobListings';
 export * from './JobListingApplication';
+export * from "./OrganizationSubscriptions"
