@@ -12,7 +12,6 @@ import { JwtService } from '@nestjs/jwt';
 import { SignInDto, SignUpDto } from './dtos/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
 import { capitalizeString } from '@/utils/helpers';
-import * as crypto from 'crypto';
 import { UserTable } from '@/drizzle/schema';
 import { ConfigService } from '@/common/services/config.service';
 import * as Sentry from '@sentry/nestjs';

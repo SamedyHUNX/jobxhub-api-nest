@@ -6,6 +6,7 @@ import { and, eq, like, or } from 'drizzle-orm';
 import type { User } from '@/types';
 import { PermissionService } from '@/common/services/permission.service';
 import { ConfigService } from '@/common/services/config.service';
+import * as Sentry from '@sentry/nestjs';
 
 @Injectable()
 export class JobListingsService {
@@ -154,6 +155,14 @@ export class JobListingsService {
     if (!jobListing) {
       throw new NotFoundException('Job listing not found');
     }
+
+    if (jobListing.organizationId !== orgId) {
+      Sentry.captureException(
+        new Error(`Unauthorized update attempt: jobId=${jobId}, orgId=${orgId}, userId=${user.id}`)
+      );
+      throw new ForbiddenException('You cannot update this job listing');
+    }
+
 
     try {
       await this.db
