@@ -23,7 +23,7 @@ import { S3HealthService } from '@/s3/services/s3-health.service';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { HashingService } from '@/common/services/hashing.service';
 import { User } from '@/types';
-import { TokenService } from '@/cache/services/token.service';
+import { TokenService } from '@/common/services/token.service';
 
 @Injectable()
 export class AuthService {
@@ -298,7 +298,7 @@ export class AuthService {
       throw new BadRequestException('Invalid token');
     }
 
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const hashedToken = this.tokenService.createHash(token)
 
     const [user] = await this.db
       .select()
@@ -688,7 +688,7 @@ export class AuthService {
         token: resetToken,
         hashedToken,
         expiresAt,
-      } = await this.tokenService.generateAndHashToken(15);
+      } = this.tokenService.generateAndHashToken(15);
 
       // Update database if user exists and should send email
       if (shouldSendEmail) {
@@ -810,7 +810,7 @@ export class AuthService {
     }
 
     // Hash the token from URL to compare with stored hash
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const hashedToken = this.tokenService.createHash(token);
 
     // Find user by reset token and check expiration
     const [user] = await this.db
