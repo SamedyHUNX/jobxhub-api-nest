@@ -13,6 +13,30 @@ export class ConfigService {
     return this.configService.getOrThrow('STRIPE_WEBHOOK_SECRET')
   }
 
+  get stripeBasicMonthlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_BASIC_MONTHLY_PRICE_ID')
+  }
+
+  get stripeBasicYearlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_BASIC_YEARLY_PRICE_ID')
+  }
+
+  get stripeGrowthMonthlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_GROWTH_MONTHLY_PRICE_ID')
+  }
+
+  get stripeGrowthYearlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_GROWTH_YEARLY_PRICE_ID')
+  }
+
+  get stripeEnterpriseMonthlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_ENTERPRISE_MONTHLY_PRICE_ID')
+  }
+
+  get stripeEnterpriseYearlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_ENTERPRISE_YEARLY_PRICE_ID')
+  }
+
   // Database
   get dbUrl(): string {
     return this.configService.getOrThrow<string>('DATABASE_URL');

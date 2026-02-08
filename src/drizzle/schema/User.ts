@@ -10,6 +10,7 @@ import { relations } from 'drizzle-orm';
 import { UserNotificationSettingsTable } from './UserNotificationSettings';
 import { UserResumeTable } from './UserResume';
 import { OrganizationUserSettingsTable } from './OrganizationUserSettings';
+import { UserSubscriptionsTable } from './UserSubscriptions';
 
 export const UserTable = pgTable('users', {
   id: idCol(),
@@ -42,4 +43,5 @@ export const userRelations = relations(UserTable, ({ one, many }) => ({
   notificationSettings: one(UserNotificationSettingsTable),
   resume: one(UserResumeTable),
   organizationUserSettings: many(OrganizationUserSettingsTable),
+  subscriptions: many(UserSubscriptionsTable),
 }));

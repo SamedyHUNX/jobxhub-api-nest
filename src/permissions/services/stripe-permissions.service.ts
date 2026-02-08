@@ -1,6 +1,7 @@
-import { ConfigService } from "@/common/services/config.service";
-import { SubscriptionPlan, SubscriptionPlanName, SubscriptionPlans } from "@/permissions/utils/subscription-plans";
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@/common/services/config.service";
+import { SubscriptionPlans } from "@/permissions/utils/subscription-plans";
+import { SubscriptionInterval, SubscriptionPlan, SubscriptionPlanName } from "@/types/enum";
 
 @Injectable()
 export class StripePermissionsService {
@@ -12,21 +13,21 @@ export class StripePermissionsService {
     getPlanByPriceId(priceId: string): {
         planName: SubscriptionPlanName;
         plan: SubscriptionPlan;
-        interval: 'monthly' | 'annual';
+        interval: SubscriptionInterval;
     } | null {
-        for (const [planName, plan] of Object.entries(SubscriptionPlans)) {
+        for (const [key, plan] of Object.entries(SubscriptionPlans)) {
             if (plan.stripePriceIdMonthly === priceId) {
                 return {
-                    planName: planName as SubscriptionPlanName,
+                    planName: key.toLowerCase() as SubscriptionPlanName,
                     plan,
-                    interval: 'monthly',
+                    interval: 'month',
                 };
             }
             if (plan.stripePriceIdAnnual === priceId) {
                 return {
-                    planName: planName as SubscriptionPlanName,
+                    planName: key.toLowerCase() as SubscriptionPlanName,
                     plan,
-                    interval: 'annual',
+                    interval: 'year',
                 };
             }
         }

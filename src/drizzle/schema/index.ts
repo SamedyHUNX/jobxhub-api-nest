@@ -1,5 +1,5 @@
 // Export all enums (required for Drizzle migrations)
-export * from '@/utils/enums';
+export * from '@/types/enum';
 
 // Export all tables and relations
 export * from './User';
@@ -9,4 +9,7 @@ export * from './Organizations';
 export * from './OrganizationUserSettings';
 export * from './JobListings';
 export * from './JobListingApplication';
-export * from "./OrganizationSubscriptions"
+export * from "./UserSubscriptions"
+export * from "./PaymentHistory"
+
+

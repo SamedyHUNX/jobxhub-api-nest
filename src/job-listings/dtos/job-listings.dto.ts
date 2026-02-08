@@ -1,17 +1,4 @@
-import {
-  wageIntervals,
-  locationRequirements,
-  experienceLevels,
-  jobListingStatuses,
-  jobListingTypes,
-} from '@/utils/enums';
-import type {
-  WageInterval,
-  LocationRequirement,
-  ExperienceLevel,
-  JobListingStatus,
-  JobListingType,
-} from '@/utils/enums';
+
 import {
   IsBoolean,
   IsDateString,
@@ -23,8 +10,9 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-
 import { PartialType } from '@nestjs/mapped-types';
+import type { ExperienceLevel, JobListingStatus, JobListingType, LocationRequirement, WageInterval } from '@/types';
+import { experienceLevels, jobListingStatuses, jobListingTypes, locationRequirements, wageIntervals } from '@/types/enum';
 
 export class CreateJobListingDto {
   @IsString()

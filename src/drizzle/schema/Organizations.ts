@@ -9,7 +9,6 @@ import { OrganizationUserSettingsTable } from './OrganizationUserSettings';
 import { UserTable } from './User';
 import { uuid } from 'drizzle-orm/pg-core';
 import { timestamp } from 'drizzle-orm/pg-core';
-import { OrganizationSubscriptionsTable } from './OrganizationSubscriptions';
 
 export const OrganizationTable = pgTable('organizations', {
   id: idCol(),
@@ -43,6 +42,5 @@ export const OrganizationRelations = relations(
   ({ many }) => ({
     jobListings: many(JobListingTable),
     organizationUserSettings: many(OrganizationUserSettingsTable),
-    subscriptions: many(OrganizationSubscriptionsTable),
   }),
 );

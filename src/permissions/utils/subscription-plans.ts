@@ -1,3 +1,5 @@
+import { SubscriptionInterval, SubscriptionPlan, SubscriptionPlanName } from "@/types/enum";
+
 export const SubscriptionPlans = {
     BASIC: {
         name: 'Basic',
@@ -58,28 +60,25 @@ export const SubscriptionPlans = {
     },
 } as const;
 
-export type SubscriptionPlanName = keyof typeof SubscriptionPlans;
-export type SubscriptionPlan = typeof SubscriptionPlans[SubscriptionPlanName];
-
 // Helper function to get plan by Stripe Price ID
 export function getPlanByPriceId(priceId: string): {
     planName: SubscriptionPlanName;
     plan: SubscriptionPlan;
-    interval: 'monthly' | 'annual';
+    interval: SubscriptionInterval;
 } | null {
-    for (const [planName, plan] of Object.entries(SubscriptionPlans)) {
+    for (const [key, plan] of Object.entries(SubscriptionPlans)) {
         if (plan.stripePriceIdMonthly === priceId) {
             return {
-                planName: planName as SubscriptionPlanName,
+                planName: key.toLowerCase() as SubscriptionPlanName,
                 plan,
-                interval: 'monthly',
+                interval: 'month',
             };
         }
         if (plan.stripePriceIdAnnual === priceId) {
             return {
-                planName: planName as SubscriptionPlanName,
+                planName: key.toLowerCase() as SubscriptionPlanName,
                 plan,
-                interval: 'annual',
+                interval: 'year',
             };
         }
     }

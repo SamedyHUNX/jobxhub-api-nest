@@ -7,7 +7,7 @@ import {
   jobListingTypeEnum,
   locationRequirementEnum,
   wageIntervalEnum,
-} from '@/utils/enums';
+} from '@/types/enum';
 import { index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { JobListingApplicationTable } from './JobListingApplication';
