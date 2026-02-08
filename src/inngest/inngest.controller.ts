@@ -1,21 +1,22 @@
-import { All, Controller, Logger, Req, Res } from '@nestjs/common';
+import { All, Controller, Logger, OnModuleInit, Req, Res } from '@nestjs/common';
 import { serve } from 'inngest/express';
 import { UserFunctionsService } from './services/user-functions.service';
 import { InngestHealthService } from './services/inngest-health.service';
 
 @Controller('inngest')
-export class InngestController {
+export class InngestController implements OnModuleInit {
   private readonly logger = new Logger(InngestController.name);
 
   constructor(
-    private inngestHealthService: InngestHealthService,
-    private userFunctionsService: UserFunctionsService,
-  ) {
-    // Log that functions are registered
+    private readonly inngestHealthService: InngestHealthService,
+    private readonly userFunctionsService: UserFunctionsService,
+  ) {}
+
+  onModuleInit() {
     const functions = this.userFunctionsService.getFunctions();
     this.logger.log(`Inngest controller initialized with ${functions.length} functions`);
     functions.forEach((fn, index) => {
-      this.logger.log(`Function ${index + 1}: ${fn.id || 'unknown'}`);
+      this.logger.log(`Function ${index + 1}: ${fn?.id ?? 'unknown'}`);
     });
   }
 
@@ -28,7 +29,7 @@ export class InngestController {
 
     const handler = serve({
       client: this.inngestHealthService.getInngest(),
-      functions: functions,
+      functions,
     });
 
     return handler(req, res);

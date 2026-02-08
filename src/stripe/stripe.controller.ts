@@ -13,10 +13,10 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { StripeService } from './stripe.service';
-import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { CancelSubscriptionDto, CreateSubscriptionDto, UpdateSubscriptionDto } from './dto/create-subscription.dto';
 import type { RawBodyRequest } from '@/types';
+import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 
 @Controller('stripe')
 export class StripeController {
@@ -24,7 +24,7 @@ export class StripeController {
 
     // Option 1: Direct subscription creation (requires frontend payment collection)
     @Post('subscription')
-    @UseGuards(AuthGuard)
+    @UseGuards(JwtAuthGuard)
     async createSubscription(
         @CurrentUser('id') userId: string,
         @Body() dto: CreateSubscriptionDto,
@@ -34,7 +34,7 @@ export class StripeController {
 
     // Option 2: Checkout session (easier - Stripe hosts the payment page)
     @Post('checkout-session')
-    @UseGuards(AuthGuard)
+    @UseGuards(JwtAuthGuard)
     async createCheckoutSession(
         @CurrentUser('id') userId: string,
         @Body() body: CreateSubscriptionDto & { successUrl: string; cancelUrl: string },
@@ -50,13 +50,13 @@ export class StripeController {
     }
 
     @Get('subscription')
-    @UseGuards(AuthGuard)
+    @UseGuards(JwtAuthGuard)
     async getSubscription(@CurrentUser('id') userId: string) {
         return this.stripeService.getUserSubscription(userId);
     }
 
     @Put('subscription')
-    @UseGuards(AuthGuard)
+    @UseGuards(JwtAuthGuard)
     async updateSubscription(
         @CurrentUser('id') userId: string,
         @Body() dto: UpdateSubscriptionDto,
@@ -65,7 +65,7 @@ export class StripeController {
     }
 
     @Delete('subscription')
-    @UseGuards(AuthGuard)
+    @UseGuards(JwtAuthGuard)
     async cancelSubscription(
         @CurrentUser('id') userId: string,
         @Body() dto: CancelSubscriptionDto,
@@ -74,13 +74,13 @@ export class StripeController {
     }
 
     @Post('subscription/reactivate')
-    @UseGuards(AuthGuard)
+    @UseGuards(JwtAuthGuard)
     async reactivateSubscription(@CurrentUser('id') userId: string) {
         return this.stripeService.reactivateSubscription(userId);
     }
 
     @Post('billing-portal')
-    @UseGuards(AuthGuard)
+    @UseGuards(JwtAuthGuard)
     async createBillingPortal(
         @CurrentUser('id') userId: string,
         @Body('returnUrl') returnUrl: string,
@@ -90,7 +90,7 @@ export class StripeController {
     }
 
     @Get('payment-history')
-    @UseGuards(AuthGuard)
+    @UseGuards(JwtAuthGuard)
     async getPaymentHistory(@CurrentUser('id') userId: string) {
         return this.stripeService.getPaymentHistory(userId);
     }
