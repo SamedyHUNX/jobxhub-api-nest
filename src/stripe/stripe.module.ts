@@ -4,12 +4,10 @@ import { StripeController } from './stripe.controller';
 import { CommonModule } from '@/common/common.module';
 import { DrizzleModule } from '@/drizzle/drizzle.module';
 import { PermissionsModule } from '@/permissions/permissions.module';
-import { ConfigModule } from '@nestjs/config';
-
 
 
 @Module({
-    imports: [CommonModule, DrizzleModule, PermissionsModule, ConfigModule.forRoot({ isGlobal: true, })],
+    imports: [CommonModule, DrizzleModule, PermissionsModule],
     controllers: [StripeController],
     providers: [StripeService],
     exports: [StripeService],
