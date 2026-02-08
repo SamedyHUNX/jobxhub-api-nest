@@ -4,7 +4,7 @@ import { CreateJobListingDto, UpdateJobListingDto } from './dtos/job-listings.dt
 import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable } from '@/drizzle/schema';
 import { and, eq, like, or } from 'drizzle-orm';
 import type { User } from '@/types';
-import { PermissionService } from '@/common/services/permission.service';
+import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import { ConfigService } from '@/common/services/config.service';
 import * as Sentry from '@sentry/nestjs';
 
@@ -12,7 +12,7 @@ import * as Sentry from '@sentry/nestjs';
 export class JobListingsService {
   private readonly logger = new Logger(JobListingsService.name);
 
-  constructor(private dbHealth: DrizzleHealthService, private permission: PermissionService, private readonly config: ConfigService) { }
+  constructor(private dbHealth: DrizzleHealthService, private appPermission: AppPermissionService, private readonly config: ConfigService) { }
 
   private get db() {
     return this.dbHealth.getDb();
@@ -141,7 +141,7 @@ export class JobListingsService {
 
   // Update a job listing based on id
   update = async (user: User, orgId: string, jobId: string, dto: UpdateJobListingDto) => {
-    const canUpdate = this.permission.hasPermission(user, orgId, 'UPDATE_JOB_LISTING');
+    const canUpdate = this.appPermission.hasPermission(user, orgId, 'UPDATE_JOB_LISTING');
 
     if (!canUpdate) {
       throw new ForbiddenException('You are not authorized to update this job listing');

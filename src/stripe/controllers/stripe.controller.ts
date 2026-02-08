@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Headers, Req, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
-import { StripeService } from './stripe.service';
+import { StripeService } from '../services/stripe.service';
 import type { RawBodyRequest } from '@/types';
 
 

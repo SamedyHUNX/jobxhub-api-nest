@@ -1,11 +1,11 @@
 import { OrganizationUserSettingsTable } from '@/drizzle/schema';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
-import { AppRolePermissions, OrgRolePermissions } from '@/utils/rbac/role-maps';
+import { AppRolePermissions, OrgRolePermissions } from '@/permissions/utils/role-maps';
 import { Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 
 @Injectable()
-export class PermissionService {
+export class AppPermissionService {
     constructor(private readonly dbHealth: DrizzleHealthService) { }
 
     private get db() {
