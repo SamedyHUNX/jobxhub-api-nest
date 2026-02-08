@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { EmailService } from '@/common/services/email.service';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import * as Sentry from '@sentry/node';
 import { InngestHealthService } from './inngest-health.service';
-import * as Sentry from '@sentry/nestjs';
+import { EmailService } from '@/common/services/email.service';
 
 @Injectable()
-export class UserFunctionsService {
+export class UserFunctionsService implements OnModuleInit {
   private readonly logger = new Logger(UserFunctionsService.name);
   private createUserFunction;
   private forgotPasswordFunction;
@@ -13,6 +13,14 @@ export class UserFunctionsService {
     private readonly inngestHealth: InngestHealthService,
     private readonly emailService: EmailService,
   ) {
+  }
+
+  onModuleInit() {
+    // Initialize functions AFTER all dependencies are ready
+    this.initializeFunctions();
+  }
+
+  private initializeFunctions() {
     this.logger.log('Initializing Inngest functions...');
 
     this.createUserFunction = this.inngest.createFunction(

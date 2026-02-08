@@ -1,5 +1,6 @@
-import { SubscriptionPlans } from '@/permissions/utils/subscription-plans';
+// import { SubscriptionPlans } from '@/permissions/utils/subscription-plans'; // REMOVED CIRCULAR DEP
 import { pgEnum } from 'drizzle-orm/pg-core';
+
 
 // JobListings
 export const wageIntervals = ['hourly', 'yearly', 'monthly', 'weekly'] as const;
@@ -72,5 +73,3 @@ export const statusEnum = pgEnum('stripe_subscription_status', [
 export type SubscriptionPlanName = typeof planEnum.enumValues[number]; // 'basic' | 'growth' | 'enterprise'
 export type SubscriptionInterval = typeof intervalEnum.enumValues[number]; // 'month' | 'year'
 export type SubscriptionStatus = typeof statusEnum.enumValues[number];
-// Helper function to get plan by Stripe Price ID
-export type SubscriptionPlan = typeof SubscriptionPlans[keyof typeof SubscriptionPlans];

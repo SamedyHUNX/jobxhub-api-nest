@@ -6,7 +6,7 @@ export class ConfigService {
   constructor(private configService: NestConfigService) { }
 
   // Stripe
-  get stripeSecret(): string {
+  get stripeSecretKey(): string {
     return this.configService.getOrThrow('STRIPE_SECRET_KEY')
   }
   get stripeWebhookSecret(): string {

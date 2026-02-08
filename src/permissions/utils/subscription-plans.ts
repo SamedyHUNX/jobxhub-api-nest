@@ -1,4 +1,20 @@
-import { SubscriptionInterval, SubscriptionPlan, SubscriptionPlanName } from "@/types/enum";
+import { SubscriptionInterval, SubscriptionPlanName } from "@/types/enum";
+
+export interface SubscriptionPlan {
+    name: string;
+    description: string;
+    priceMonthly: number;
+    priceAnnual: number;
+    stripePriceIdMonthly: string | undefined;
+    stripePriceIdAnnual: string | undefined;
+    limits: {
+        jobPostings: number;
+        featuredListings: number;
+    };
+    allowedRoles: readonly string[];
+    features: readonly string[]; // Features are strings
+}
+
 
 export const SubscriptionPlans = {
     BASIC: {

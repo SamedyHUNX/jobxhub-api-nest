@@ -3,7 +3,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import Stripe from 'stripe';
 import { UserSubscriptionsTable, PaymentHistoryTable, UserTable } from '../drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { PlanName, BillingInterval, SubscriptionStatus } from './types/stripe.types';
+import { PlanName, BillingInterval, SubscriptionStatus, ExpandedInvoice } from './types/stripe.types';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { ConfigService } from '@/common/services/config.service';
 import { CreateSubscriptionDto, UpdateSubscriptionDto } from './dto/create-subscription.dto';
@@ -18,8 +18,8 @@ export class StripeService {
         private readonly configService: ConfigService,
         private readonly dbHealth: DrizzleHealthService,
     ) {
-        this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY')!, {
-            apiVersion: "2026-01-28.clover"
+        this.stripe = new Stripe(this.configService.stripeSecretKey, {
+            apiVersion: '2026-01-28.clover'
         });
 
         this.priceIds = {
@@ -80,35 +80,40 @@ export class StripeService {
                 metadata: { userId },
             });
 
+            const {
+                id: subscriptionId,
+                status,
+                items,
+                trial_start,
+                trial_end,
+                latest_invoice,
+            } = subscription;
+
+            const subscriptionItem = items.data[0];
+
             // Save to database
             await this.db.insert(UserSubscriptionsTable).values({
                 userId,
                 planName: dto.planName,
-                status: subscription.status as SubscriptionStatus,
+                status: status as SubscriptionStatus,
                 interval: dto.interval,
                 stripeCustomerId: customer.id,
-                stripeSubscriptionId: subscription.id,
+                stripeSubscriptionId: subscriptionId,
                 stripePriceId: priceId,
-                currentPeriodStart: new Date(subscription.current_period_start * 1000),
-                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-                trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
-                trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+                currentPeriodStart: new Date(subscriptionItem.current_period_start * 1000),
+                currentPeriodEnd: new Date(subscriptionItem.current_period_end * 1000),
+                trialStart: trial_start ? new Date(trial_start * 1000) : null,
+                trialEnd: trial_end ? new Date(trial_end * 1000) : null,
             });
 
-            // Extract client secret safely
-            let clientSecret: string | null = null;
+            // Extract client secret from expanded invoice
+            const clientSecret =
+                typeof latest_invoice === 'object' &&
+                    typeof (latest_invoice as any).payment_intent === 'object'
+                    ? (latest_invoice as any).payment_intent.client_secret ?? null
+                    : null;
 
-            if (subscription.latest_invoice && typeof subscription.latest_invoice === 'object') {
-                const invoice = subscription.latest_invoice;
-                if (invoice.payment_intent && typeof invoice.payment_intent === 'object') {
-                    clientSecret = invoice.payment_intent.client_secret;
-                }
-            }
-
-            return {
-                subscriptionId: subscription.id,
-                clientSecret,
-            };
+            return { subscriptionId, clientSecret };
         } catch (error) {
             this.logger.error('Failed to create subscription', error);
             throw new BadRequestException('Failed to create subscription');
@@ -139,14 +144,20 @@ export class StripeService {
                 }
             );
 
+            const {
+                id, items,
+            } = updated;
+
+            const subscriptionItem = items.data[0];
+
             await this.db
                 .update(UserSubscriptionsTable)
                 .set({
                     planName: dto.planName,
                     interval: dto.interval,
                     stripePriceId: priceId,
-                    currentPeriodStart: new Date(updated.current_period_start * 1000),
-                    currentPeriodEnd: new Date(updated.current_period_end * 1000),
+                    currentPeriodStart: new Date(subscriptionItem.current_period_start * 1000),
+                    currentPeriodEnd: new Date(subscriptionItem.current_period_end * 1000),
                     updatedAt: new Date(),
                 })
                 .where(eq(UserSubscriptionsTable.id, subscription.id));
@@ -286,7 +297,7 @@ export class StripeService {
     }
 
     async handleWebhook(signature: string, payload: Buffer): Promise<void> {
-        const webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET')!;
+        const webhookSecret = this.configService.stripeWebhookSecret;
 
         let event: Stripe.Event;
 
@@ -342,6 +353,14 @@ export class StripeService {
                 return;
             }
 
+            const {
+                items,
+            } = subscription;
+
+            const subscriptionItem = items.data[0];
+
+
+
             const priceId = subscription.items.data[0]?.price.id;
 
             await this.db.insert(UserSubscriptionsTable).values({
@@ -354,20 +373,25 @@ export class StripeService {
                     : subscription.customer.id,
                 stripeSubscriptionId: subscription.id,
                 stripePriceId: priceId,
-                currentPeriodStart: new Date(subscription.current_period_start * 1000),
-                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                currentPeriodStart: new Date(subscriptionItem.current_period_start * 1000),
+                currentPeriodEnd: new Date(subscriptionItem.current_period_end * 1000),
                 cancelAtPeriodEnd: subscription.cancel_at_period_end,
                 trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
                 trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
             });
         } else {
+            const {
+                items,
+            } = subscription;
+
+            const subscriptionItem = items.data[0];
             // Update existing subscription
             await this.db
                 .update(UserSubscriptionsTable)
                 .set({
                     status: subscription.status as SubscriptionStatus,
-                    currentPeriodStart: new Date(subscription.current_period_start * 1000),
-                    currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                    currentPeriodStart: new Date(subscriptionItem.current_period_start * 1000),
+                    currentPeriodEnd: new Date(subscriptionItem.current_period_end * 1000),
                     cancelAtPeriodEnd: subscription.cancel_at_period_end,
                     updatedAt: new Date(),
                 })
@@ -386,14 +410,14 @@ export class StripeService {
             .where(eq(UserSubscriptionsTable.stripeSubscriptionId, subscription.id));
     }
 
-    private async handleInvoicePaid(invoice: Stripe.Invoice) {
+    private async handleInvoicePaid(invoice: ExpandedInvoice) {
         if (!invoice.subscription) return;
 
         const subscriptionId = typeof invoice.subscription === 'string'
             ? invoice.subscription
             : invoice.subscription.id;
 
-        const subscription = await this.db.db.query.UserSubscriptionsTable.findFirst({
+        const subscription = await this.db.query.UserSubscriptionsTable.findFirst({
             where: eq(UserSubscriptionsTable.stripeSubscriptionId, subscriptionId),
         });
 
@@ -415,7 +439,6 @@ export class StripeService {
                     : new Date(),
             });
 
-            // Update subscription status to active if it was in trial/incomplete
             if (subscription.status !== SubscriptionStatus.ACTIVE) {
                 await this.db
                     .update(UserSubscriptionsTable)
@@ -428,7 +451,7 @@ export class StripeService {
         }
     }
 
-    private async handlePaymentFailed(invoice: Stripe.Invoice) {
+    private async handlePaymentFailed(invoice: ExpandedInvoice) {
         if (!invoice.subscription) return;
 
         const subscriptionId = typeof invoice.subscription === 'string'
@@ -459,7 +482,7 @@ export class StripeService {
         }
     }
 
-    private async handlePaymentActionRequired(invoice: Stripe.Invoice) {
+    private async handlePaymentActionRequired(invoice: ExpandedInvoice) {
         if (!invoice.subscription) return;
 
         const subscriptionId = typeof invoice.subscription === 'string'

@@ -1,3 +1,5 @@
+import Stripe from "stripe";
+
 export enum PlanName {
     BASIC = 'basic',
     GROWTH = 'growth',
@@ -28,4 +30,9 @@ export interface StripeConfig {
             yearly: string;
         };
     };
+}
+
+export interface ExpandedInvoice extends Stripe.Invoice {
+    subscription?: string | Stripe.Subscription;
+    payment_intent?: string | Stripe.PaymentIntent | null;
 }

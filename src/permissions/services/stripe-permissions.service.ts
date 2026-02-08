@@ -1,12 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import { ConfigService } from "@/common/services/config.service";
-import { SubscriptionPlans } from "@/permissions/utils/subscription-plans";
-import { SubscriptionInterval, SubscriptionPlan, SubscriptionPlanName } from "@/types/enum";
+import { SubscriptionInterval, SubscriptionPlanName } from "@/types/enum";
+import { SubscriptionPlan, SubscriptionPlans } from "@/permissions/utils/subscription-plans";
+
 
 @Injectable()
 export class StripePermissionsService {
     constructor(
-        private configService: ConfigService
     ) { }
 
     // Get plan by Stripe Price ID

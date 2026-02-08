@@ -13,6 +13,6 @@ import { InngestClientService } from './services/inngest.service';
     InngestHealthService,
     InngestClientService,
   ],
-  exports: [InngestHealthService, UserFunctionsService],
+  exports: [InngestHealthService, UserFunctionsService, InngestClientService],
 })
 export class InngestModule { }
