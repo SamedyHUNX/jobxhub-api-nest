@@ -14,6 +14,9 @@ import { SignInService } from './services/sign-in.service';
 import { AuthUtilsService } from './services/auth-utils.service';
 import { VerifyEmailService } from './services/verify-email.service';
 import { ForgotPasswordService } from './services/forgot-password.service';
+import { ResetPasswordService } from './services/reset-password.service';
+import { SignOutService } from './services/sign-out.service';
+import { ValidateUserService } from './services/validate-user.service';
 
 @Module({
   imports: [
@@ -36,6 +39,6 @@ import { ForgotPasswordService } from './services/forgot-password.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, SignUpService, SignInService, AuthUtilsService, VerifyEmailService, ForgotPasswordService],
+  providers: [AuthService, JwtStrategy, SignUpService, SignInService, AuthUtilsService, VerifyEmailService, ForgotPasswordService, ResetPasswordService, SignOutService, ValidateUserService],
 })
 export class AuthModule { }
