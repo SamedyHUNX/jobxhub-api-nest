@@ -3,7 +3,6 @@ import { StripeClientService } from "./stripe-client.service";
 import { StripeCustomerService } from "./stripe-customer.service";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { CreateSubscriptionDto } from "../dto/create-subscription.dto";
-import Stripe from 'stripe';
 import { StripeSubscriptionService } from "./stripe-subscription.service";
 
 @Injectable()
@@ -25,7 +24,8 @@ export class StripeCheckoutService {
     ): Promise<string> {
         try {
             const customer = await this.stripeCustomerService.getOrCreateCustomer(userId);
-            const priceId = this.stripeClientService.getPriceId[dto.planName][dto.interval];
+
+            const priceId = this.stripeClientService.getPriceId(dto.planName, dto.interval);
 
             const session = await this.stripeClientService.client.checkout.sessions.create({
                 customer: customer.id,
@@ -42,9 +42,10 @@ export class StripeCheckoutService {
                 ...(dto.trialPeriod && {
                     subscription_data: {
                         trial_period_days: 14,
+                        metadata: { userId },
                     },
                 }),
-                metadata: { userId },
+                metadata: { userId }, // Session metadata
             });
 
             return session.url!;

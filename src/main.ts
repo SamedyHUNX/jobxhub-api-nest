@@ -9,7 +9,9 @@ import bodyParser from 'body-parser';
 
 async function bootstrap() {
   // Create the App
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+  });
   // To access the ConfigService (Environment Variables)
   const configService = app.get(ConfigService);
   const clientUrls = configService.get<string>('CLIENT_URLS')?.split(',') || [];
@@ -51,7 +53,6 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
-  app.use('/stripe/webhook', bodyParser.raw({ type: 'application/json' }));
   // Start the server
   await app.listen(configService.port);
 }

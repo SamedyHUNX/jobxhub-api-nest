@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { SubscriptionInterval, SubscriptionPlanName } from "@/types/enum";
-import { SubscriptionPlan, SubscriptionPlans } from "@/permissions/utils/subscription-plans";
+import { SubscriptionPlan, SubscriptionPlans } from "@/stripe/types/subscription-plans";
 
 
 @Injectable()

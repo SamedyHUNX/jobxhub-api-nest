@@ -17,7 +17,7 @@ export interface SubscriptionPlan {
 
 
 export const SubscriptionPlans = {
-    BASIC: {
+    Basic: {
         name: 'Basic',
         description: 'Perfect for small teams starting out',
         priceMonthly: 10,
@@ -35,7 +35,7 @@ export const SubscriptionPlans = {
             'Basic analytics',
         ],
     },
-    GROWTH: {
+    Growth: {
         name: 'Growth',
         description: 'For growing companies',
         priceMonthly: 25,
@@ -54,7 +54,7 @@ export const SubscriptionPlans = {
             'Job listing management',
         ],
     },
-    ENTERPRISE: {
+    Enterprise: {
         name: 'Enterprise',
         description: 'For large organizations',
         priceMonthly: 100,

@@ -1,8 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import Stripe from 'stripe';
 import { ConfigService } from "@/common/services/config.service"
 import { PlanName, BillingInterval } from './../types/stripe.types';
-import { SubscriptionPlans } from '@/permissions/utils/subscription-plans';
+import { SubscriptionPlans } from '@/stripe/types/subscription-plans';
 
 @Injectable()
 export class StripeClientService {
@@ -16,14 +16,30 @@ export class StripeClientService {
     }
 
     // Helper to get price ID from your existing config
+    // stripe-client.service.ts
     getPriceId(planName: PlanName, interval: BillingInterval): string {
+        console.log('=== DEBUG getPriceId ===');
+        console.log('planName:', planName);
+        console.log('interval:', interval);
+        console.log('Available plans:', Object.keys(SubscriptionPlans));
+        console.log('========================');
+
         const plan = SubscriptionPlans[planName];
 
-        return interval === BillingInterval.MONTH
+        if (!plan) {
+            this.logger.error(`Plan not found: ${planName}`);
+            this.logger.error(`Available plans: ${Object.keys(SubscriptionPlans).join(', ')}`);
+            throw new BadRequestException(`Invalid plan: ${planName}`);
+        }
+
+        const priceId = interval === BillingInterval.MONTH
             ? plan.stripePriceIdMonthly
             : plan.stripePriceIdAnnual;
-    }
 
+        console.log('Selected priceId:', priceId);
+
+        return priceId;
+    }
     getPlanNameFromPriceId(priceId: string): PlanName {
         for (const [planName, plan] of Object.entries(SubscriptionPlans)) {
             if (plan.stripePriceIdMonthly === priceId || plan.stripePriceIdAnnual === priceId) {

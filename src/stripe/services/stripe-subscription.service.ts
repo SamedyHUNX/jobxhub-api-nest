@@ -24,8 +24,11 @@ export class StripeSubscriptionService {
             // Get or create Stripe customer
             const customer = await this.stripeCustomerService.getOrCreateCustomer(userId);
 
+            console.log('hi', customer)
+
             // Get price ID
             const priceId = this.stripeClientService.getPriceId[dto.planName][dto.interval];
+
 
             // Create subscription
             const subscription = await this.stripeClientService.client.subscriptions.create({

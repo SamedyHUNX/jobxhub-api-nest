@@ -14,7 +14,7 @@ export const UserSubscriptionsTable = pgTable('user_subscriptions', {
     interval: intervalEnum('interval').notNull(),
     stripeCustomerId: varchar('stripe_customer_id').notNull(),
     stripeSubscriptionId: varchar('stripe_subscription_id').notNull(),
-    stripePriceId: varchar('stripe_price_id').notNull(), // Managing pricing
+    stripePriceId: varchar('stripe_price_id').notNull(),
     currentPeriodStart: timestamp('current_period_start').notNull(),
     currentPeriodEnd: timestamp('current_period_end').notNull(),
     cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false).notNull(),
