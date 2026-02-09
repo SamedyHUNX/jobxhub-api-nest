@@ -30,27 +30,19 @@ export class StripeController {
         private stripeWebhookService: StripeWebhookService
     ) { }
 
-    // Option 1: Direct subscription creation (requires frontend payment collection)
+    // Direct subscription creation (requires frontend payment collection)
     @Post('subscription')
     @UseGuards(JwtAuthGuard)
     async createSubscription(
         @CurrentUser() user: User,
         @Body() dto: CreateSubscriptionDto,
     ) {
-        console.log('=== Controller Debug ===');
-        console.log('User:', user);
-        console.log('DTO:', dto);
-        console.log('DTO keys:', Object.keys(dto));
-        console.log('planName:', dto.planName);
-        console.log('interval:', dto.interval);
-        console.log('=======================');
-
         return this.stripeSubscriptionService.createSubscription(user.id, dto);
     }
 
 
 
-    // Option 2: Checkout session (easier - Stripe hosts the payment page)
+    // Checkout session (Stripe hosts the payment page)
     @Post('checkout-session')
     @UseGuards(JwtAuthGuard)
     async createCheckoutSession(

@@ -15,15 +15,8 @@ export class StripeClientService {
         });
     }
 
-    // Helper to get price ID from your existing config
-    // stripe-client.service.ts
+    // Helper to get price ID
     getPriceId(planName: PlanName, interval: BillingInterval): string {
-        console.log('=== DEBUG getPriceId ===');
-        console.log('planName:', planName);
-        console.log('interval:', interval);
-        console.log('Available plans:', Object.keys(SubscriptionPlans));
-        console.log('========================');
-
         const plan = SubscriptionPlans[planName];
 
         if (!plan) {
@@ -35,8 +28,6 @@ export class StripeClientService {
         const priceId = interval === BillingInterval.MONTH
             ? plan.stripePriceIdMonthly
             : plan.stripePriceIdAnnual;
-
-        console.log('Selected priceId:', priceId);
 
         return priceId;
     }

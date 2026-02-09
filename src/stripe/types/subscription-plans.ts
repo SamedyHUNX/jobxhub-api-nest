@@ -12,7 +12,7 @@ export interface SubscriptionPlan {
         featuredListings: number;
     };
     allowedRoles: readonly string[];
-    features: readonly string[]; // Features are strings
+    features: readonly string[];
 }
 
 

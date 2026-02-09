@@ -10,7 +10,8 @@ export interface CachedUser {
   imageUrl?: string;
   userRole: string;
   tokenVersion?: number;
-  // Other fields as needed
+  hasSubscription?: boolean;
+  subscription?: any
 }
 
 @Injectable()
@@ -18,16 +19,12 @@ export class UserCacheService {
   private readonly logger = new Logger(UserCacheService.name);
   private readonly TTL = 15 * 60 * 1000; // 15 minutes
 
-  constructor(private readonly cacheHealth: CacheHealthService) { }
-
-  private get cache() {
-    return this.cacheHealth.getValidatedCache();
-  }
+  constructor(private readonly cacheService: CacheHealthService) { }
 
   // Get user by email
   async getUserByEmail(email: string): Promise<CachedUser | null> {
     try {
-      const user = await this.cache.get<CachedUser>(`user:email:${email}`);
+      const user = await this.cacheService.getValidatedCache().get<CachedUser>(`user:email:${email}`);
       return user ?? null;
     } catch (error) {
       this.logger.error(`Failed to get user by email: ${error.message}`);
@@ -38,7 +35,7 @@ export class UserCacheService {
   // Get user by ID
   async getUserById(userId: string): Promise<CachedUser | null> {
     try {
-      const user = await this.cache.get<CachedUser>(`user:id:${userId}`);
+      const user = await this.cacheService.getValidatedCache().get<CachedUser>(`user:id:${userId}`);
       return user ?? null;
     } catch (error) {
       this.logger.error(`Failed to get user by ID: ${error.message}`);
@@ -50,8 +47,8 @@ export class UserCacheService {
   async setUser(user: CachedUser): Promise<void> {
     try {
       await Promise.all([
-        this.cache.set(`user:email:${user.email}`, user, this.TTL),
-        this.cache.set(`user:id:${user.id}`, user, this.TTL),
+        this.cacheService.getValidatedCache().set(`user:email:${user.email}`, user, this.TTL),
+        this.cacheService.getValidatedCache().set(`user:id:${user.id}`, user, this.TTL),
       ]);
       this.logger.debug(`User cached: ${user.email}`);
     } catch (error) {
@@ -64,8 +61,8 @@ export class UserCacheService {
   async clearUser(user: { email: string; id: string }): Promise<void> {
     try {
       await Promise.all([
-        this.cache.del(`user:email:${user.email}`),
-        this.cache.del(`user:id:${user.id}`),
+        this.cacheService.getValidatedCache().del(`user:email:${user.email}`),
+        this.cacheService.getValidatedCache().del(`user:id:${user.id}`),
       ]);
       this.logger.log(`Cache cleared for user: ${user.email}`);
     } catch (error) {
@@ -82,16 +79,16 @@ export class UserCacheService {
   async invalidateAllSessions(userId: string): Promise<void> {
     try {
       // Delete main session cache
-      await this.cache.del(`session:${userId}`);
+      await this.cacheService.getValidatedCache().del(`session:${userId}`);
 
       // Check if the cache store supports pattern deletion
-      const store = (this.cache as any).store;
+      const store = (this.cacheService.getValidatedCache() as any).store;
       if (store && store.keys) {
         const pattern = `session:${userId}:*`;
         const keys = await store.keys(pattern);
 
         if (keys.length > 0) {
-          await Promise.all(keys.map((key: string) => this.cache.del(key)));
+          await Promise.all(keys.map((key: string) => this.cacheService.getValidatedCache().del(key)));
         }
       }
 
@@ -107,7 +104,7 @@ export class UserCacheService {
       ? `session:${userId}:${sessionId}`
       : `session:${userId}`;
     try {
-      return await this.cache.get(key);
+      return await this.cacheService.getValidatedCache().get(key);
     } catch (error) {
       this.logger.error(`Failed to get session: ${error.message}`);
       return null;
@@ -125,7 +122,7 @@ export class UserCacheService {
       ? `session:${userId}:${sessionId}`
       : `session:${userId}`;
     try {
-      await this.cache.set(key, sessionData, ttl || this.TTL);
+      await this.cacheService.getValidatedCache().set(key, sessionData, ttl || this.TTL);
     } catch (error) {
       this.logger.error(`Failed to set session: ${error.message}`);
     }

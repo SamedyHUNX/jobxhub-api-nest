@@ -6,6 +6,7 @@ import Stripe from 'stripe';
 import { ExpandedInvoice, PlanName, SubscriptionStatus } from "../types/stripe.types";
 import { eq } from "drizzle-orm";
 import { PaymentHistoryTable, UserSubscriptionsTable } from "@/drizzle/schema";
+import * as Sentry from '@sentry/node';
 
 @Injectable()
 export class StripeWebhookService {
@@ -38,6 +39,7 @@ export class StripeWebhookService {
                 webhookSecret
             );
         } catch (error) {
+            Sentry.captureException(error);
             this.logger.error('Webhook signature verification failed', error);
             throw new BadRequestException('Invalid signature');
         }
@@ -69,6 +71,7 @@ export class StripeWebhookService {
                     this.logger.log(`Unhandled event type: ${event.type}`);
             }
         } catch (error) {
+            Sentry.captureException(error);
             this.logger.error(`Error handling webhook ${event.type}`, error);
         }
     }

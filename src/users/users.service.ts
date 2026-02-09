@@ -25,10 +25,6 @@ export class UsersService {
     private readonly appPermission: AppPermissionService
   ) { }
 
-  private getTimestamp(): string {
-    return new Date().toISOString();
-  }
-
   private get userCache() {
     return this.userCacheService;
   }

@@ -4,6 +4,7 @@ import { StripeCustomerService } from "./stripe-customer.service";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { CreateSubscriptionDto } from "../dto/create-subscription.dto";
 import { StripeSubscriptionService } from "./stripe-subscription.service";
+import * as Sentry from "@sentry/nestjs";
 
 @Injectable()
 export class StripeCheckoutService {
@@ -50,6 +51,7 @@ export class StripeCheckoutService {
 
             return session.url!;
         } catch (error) {
+            Sentry.captureException(error);
             this.logger.error('Failed to create checkout session', error);
             throw new BadRequestException('Failed to create checkout session');
         }
@@ -70,6 +72,7 @@ export class StripeCheckoutService {
 
             return session.url;
         } catch (error) {
+            Sentry.captureException(error);
             this.logger.error('Failed to create billing portal session', error);
             throw new BadRequestException('Failed to create billing portal session');
         }

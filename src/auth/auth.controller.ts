@@ -33,6 +33,7 @@ import { VerifyEmailService } from './services/verify-email.service';
 import { ForgotPasswordService } from './services/forgot-password.service';
 import { ResetPasswordService } from './services/reset-password.service';
 import { SignOutService } from './services/sign-out.service';
+import type { User } from '@/types';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -137,7 +138,7 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
-  getMe(@CurrentUser() user: any) {
+  getMe(@CurrentUser() user: User) {
     const userData = plainToInstance(UserResponseDto, user, {
       excludeExtraneousValues: true,
     });

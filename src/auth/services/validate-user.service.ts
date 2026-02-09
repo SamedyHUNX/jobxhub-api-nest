@@ -1,8 +1,8 @@
 import { UserCacheService } from "@/cache/services/user-cache.service";
-import { UserTable } from "@/drizzle/schema";
+import { UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 
 @Injectable()
 export class ValidateUserService {
@@ -57,9 +57,23 @@ export class ValidateUserService {
             );
         }
 
-        // Cache the user for future requests
-        await this.userCacheService.setUser(user)
+        // Fetch subscription info
+        const [subscription] = await this.dbService.getDb().select()
+            .from(UserSubscriptionsTable)
+            .where(and(
+                eq(UserSubscriptionsTable.userId, user.id), eq(UserSubscriptionsTable.status, 'active'),
+                gt(UserSubscriptionsTable.currentPeriodEnd, new Date())))
+            .limit(1);
 
-        return user;
+        const userWithSubscription = {
+            ...user,
+            hasSubscription: !!subscription,
+            subscription: subscription || null,
+        }
+
+        // Cache user
+        await this.userCacheService.setUser(userWithSubscription)
+
+        return userWithSubscription;
     };
 }

@@ -7,12 +7,15 @@ import { UserSubscriptionsTable } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { SubscriptionStatus } from "../types/stripe.types";
 import Stripe from 'stripe';
+import { UserCacheService } from "@/cache/services/user-cache.service";
+import * as Sentry from "@sentry/nestjs";
 
 @Injectable()
 export class StripeSubscriptionService {
     private readonly logger = new Logger(StripeSubscriptionService.name);
 
     constructor(
+        private userCacheService: UserCacheService,
         private readonly stripeClientService: StripeClientService,
         private readonly stripeCustomerService: StripeCustomerService,
         private readonly dbService: DrizzleHealthService,
@@ -23,8 +26,6 @@ export class StripeSubscriptionService {
         try {
             // Get or create Stripe customer
             const customer = await this.stripeCustomerService.getOrCreateCustomer(userId);
-
-            console.log('hi', customer)
 
             // Get price ID
             const priceId = this.stripeClientService.getPriceId[dto.planName][dto.interval];
@@ -76,6 +77,7 @@ export class StripeSubscriptionService {
 
             return { subscriptionId, clientSecret };
         } catch (error) {
+            Sentry.captureException(error);
             this.logger.error('Failed to create subscription', error);
             throw new BadRequestException('Failed to create subscription');
         }
@@ -125,6 +127,7 @@ export class StripeSubscriptionService {
 
             return updated;
         } catch (error) {
+            Sentry.captureException(error);
             this.logger.error('Failed to update subscription', error);
             throw new BadRequestException('Failed to update subscription');
         }
@@ -165,6 +168,7 @@ export class StripeSubscriptionService {
 
             return updated;
         } catch (error) {
+            Sentry.captureException(error);
             this.logger.error('Failed to cancel subscription', error);
             throw new BadRequestException('Failed to cancel subscription');
         }
@@ -195,15 +199,22 @@ export class StripeSubscriptionService {
 
             return updated;
         } catch (error) {
+            Sentry.captureException(error);
             this.logger.error('Failed to reactivate subscription', error);
             throw new BadRequestException('Failed to reactivate subscription');
         }
     }
 
     async getUserSubscription(userId: string) {
-        return this.dbService.getDb().query.UserSubscriptionsTable.findFirst({
-            where: eq(UserSubscriptionsTable.userId, userId),
-            orderBy: (table, { desc }) => [desc(table.createdAt)],
-        });
+        try {
+            return this.dbService.getDb().query.UserSubscriptionsTable.findFirst({
+                where: eq(UserSubscriptionsTable.userId, userId),
+                orderBy: (table, { desc }) => [desc(table.createdAt)],
+            });
+        } catch (error) {
+            Sentry.captureException(error);
+            this.logger.error('Failed to get user subscription', error);
+            throw new BadRequestException('Failed to get user subscription');
+        }
     }
 }
