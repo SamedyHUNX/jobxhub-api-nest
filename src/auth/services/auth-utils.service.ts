@@ -32,7 +32,7 @@ export class AuthUtilsService {
         return await this.s3Service.uploadFileAndGetUrl(imageFile, 'users', 'avatars');
     }
 
-    async getTimestamp() {
+    getTimestamp() {
         return new Date().toISOString();
     }
 }

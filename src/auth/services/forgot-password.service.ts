@@ -7,12 +7,12 @@ import { InngestHealthService } from "@/inngest/services/inngest-health.service"
 import { HttpException, HttpStatus, Injectable, Logger } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import * as Sentry from "@sentry/nestjs"
-import { UtilsService } from "@/common/services/utils.service";
+import { AuthUtilsService } from "./auth-utils.service";
 
 @Injectable()
 export class ForgotPasswordService {
     private logger = new Logger(ForgotPasswordService.name)
-    constructor(private rateLimitCacheService: RateLimitCacheService, private dbService: DrizzleHealthService, private tokenService: TokenService, private readonly configService: ConfigService, private inngestService: InngestHealthService, private utilsService: UtilsService) { }
+    constructor(private rateLimitCacheService: RateLimitCacheService, private dbService: DrizzleHealthService, private tokenService: TokenService, private readonly configService: ConfigService, private inngestService: InngestHealthService, private authUtilsService: AuthUtilsService) { }
 
     async forgotPassword(
         email: string,
@@ -126,7 +126,7 @@ export class ForgotPasswordService {
             // Log different scenarios to Sentry for monitoring
             if (!userExists) {
                 this.logger.warn(
-                    `Password reset requested for non-existent email: at ${this.utilsService.getTimestamp()}`,
+                    `Password reset requested for non-existent email: at ${this.authUtilsService.getTimestamp()}`,
                 );
                 Sentry.captureMessage('Password reset for non-existent email', {
                     level: 'warning',

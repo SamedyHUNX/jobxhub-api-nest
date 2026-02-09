@@ -4,7 +4,6 @@ import { HashingService } from './services/hashing.service';
 import { ConfigService } from './services/config.service';
 import { EmailService } from './services/email.service';
 import { TokenService } from './services/token.service';
-import { UtilsService } from './services/utils.service';
 
 @Global()
 @Module({
@@ -13,7 +12,7 @@ import { UtilsService } from './services/utils.service';
       isGlobal: true,
     }),
   ],
-  providers: [HashingService, ConfigService, EmailService, TokenService, UtilsService],
-  exports: [HashingService, ConfigService, EmailService, TokenService, UtilsService],
+  providers: [HashingService, ConfigService, EmailService, TokenService],
+  exports: [HashingService, ConfigService, EmailService, TokenService],
 })
 export class CommonModule { }
