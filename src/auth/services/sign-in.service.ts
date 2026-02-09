@@ -16,7 +16,7 @@ export class SignInService {
     private readonly logger = new Logger(SignInService.name);
 
     constructor(
-        private readonly dbHealth: DrizzleHealthService,
+        private readonly dbService: DrizzleHealthService,
         private readonly hashingService: HashingService,
         private readonly configService: ConfigService,
         private readonly userCacheService: UserCacheService,
@@ -60,7 +60,7 @@ export class SignInService {
                 // Get user from cache
                 user = cachedUser;
 
-                const [dbStatus] = await this.dbHealth.getDb()
+                const [dbStatus] = await this.dbService.getDb()
                     .select({
                         isBanned: UserTable.isBanned,
                         isDisabled: UserTable.isDisabled,
@@ -101,7 +101,7 @@ export class SignInService {
 
                 await this.userCacheService.setUser(user)
             } else {
-                const [dbUser] = await this.dbHealth.getDb()
+                const [dbUser] = await this.dbService.getDb()
                     .select()
                     .from(UserTable)
                     .where(eq(UserTable.email, email))

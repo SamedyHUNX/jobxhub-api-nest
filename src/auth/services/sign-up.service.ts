@@ -10,34 +10,22 @@ import { UserTable } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { capitalizeString } from "@/utils/helpers";
 import * as Sentry from '@sentry/node';
-import { S3Service } from "@/s3/services/s3.service";
-import { Inngest } from "inngest";
-import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "@/drizzle/schema";
 import { AuthUtilsService } from "./auth-utils.service";
 import type { User } from "@/types";
 
-@Injectable() export class SignUpService implements OnModuleInit {
+@Injectable() export class SignUpService {
     private logger = new Logger(SignUpService.name)
-    private db: NodePgDatabase<typeof schema>;
-    private s3: S3Service;
-    private inngest: Inngest;
 
     constructor(
         private readonly hashingService: HashingService,
-        private readonly s3Health: S3HealthService,
+        private readonly s3Service: S3HealthService,
         private readonly configService: ConfigService,
-        private readonly inngestHealth: InngestHealthService,
-        private readonly dbHealth: DrizzleHealthService,
+        private readonly inngestService: InngestHealthService,
+        private readonly dbService: DrizzleHealthService,
         private readonly tokenService: TokenService,
         private readonly authUtilService: AuthUtilsService,
     ) { }
 
-    async onModuleInit() {
-        this.db = this.dbHealth.getDb();
-        this.s3 = this.s3Health.s3();
-        this.inngest = this.inngestHealth.getInngest()
-    }
     async signUp(
         data: SignUpDto,
         imageFile: Express.Multer.File,
@@ -82,7 +70,7 @@ import type { User } from "@/types";
             return true;
         } catch (error) {
             // Cleanup orphaned file
-            await this.s3.cleanupUploadedImage(imageKey);
+            await this.s3Service.s3().cleanupUploadedImage(imageKey);
             throw error;
         }
     }
@@ -108,7 +96,7 @@ import type { User } from "@/types";
         } = await this.tokenService.generateAndHashToken(60 * 24);
 
         try {
-            const [user] = await this.db
+            const [user] = await this.dbService.getDb()
                 .insert(UserTable)
                 .values({
                     username: userData.username,
@@ -175,7 +163,7 @@ import type { User } from "@/types";
                 acceptLanguage: locale,
             };
 
-            await this.inngest.send({
+            await this.inngestService.getInngest().send({
                 name: 'jobxhub/user.created',
                 data: eventData,
             });
@@ -192,10 +180,10 @@ import type { User } from "@/types";
         inngestError: any,
     ) {
         // Delete the user
-        await this.db.delete(UserTable).where(eq(UserTable.id, userId));
+        await this.dbService.getDb().delete(UserTable).where(eq(UserTable.id, userId));
 
         // Delete the uploaded image
-        await this.s3.deleteFile(imageKey);
+        await this.s3Service.s3().deleteFile(imageKey);
 
         const errorMessage = inngestError?.message || 'Unknown error';
         const errorStack = inngestError?.stack || 'No stack trace available';

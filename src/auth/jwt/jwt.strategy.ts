@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthService } from '../auth.service';
 import { Request } from 'express';
 import { ConfigService } from '@/common/services/config.service';
+import type { PayloadType } from './types/jwt.types';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -29,7 +30,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: PayloadType) {
     const user = await this.authService.validateUser(payload);
     if (!user) {
       throw new UnauthorizedException('Invalid token');
