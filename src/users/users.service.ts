@@ -1,4 +1,3 @@
-import { AuthService } from '@/auth/auth.service';
 import { DrizzleService } from '@/drizzle/services/drizzle.service';
 import {
   BadRequestException,
@@ -18,7 +17,7 @@ import { AppPermissionService } from '@/permissions/services/app-permissions.ser
 
 @Injectable()
 export class UsersService {
-  private readonly logger = new Logger(AuthService.name);
+  private readonly logger = new Logger(UsersService.name);
   constructor(
     private dbService: DrizzleService,
     private s3Health: S3HealthService,

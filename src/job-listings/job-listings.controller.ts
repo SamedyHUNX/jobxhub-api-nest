@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { JobListingsService } from './job-listings.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
-import { CreateJobListingDto, UpdateJobListingDto } from './dtos/job-listings.dto';
+import { CreateJobListingDto, UpdateJobListingDto } from './dto/job-listings.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { User } from '@/types';

@@ -1,6 +1,6 @@
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
-import { CreateJobListingDto, UpdateJobListingDto } from './dtos/job-listings.dto';
+import { CreateJobListingDto, UpdateJobListingDto } from './dto/job-listings.dto';
 import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable } from '@/drizzle/schema';
 import { and, eq, like, or } from 'drizzle-orm';
 import type { User } from '@/types';
