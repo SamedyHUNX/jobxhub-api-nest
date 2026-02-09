@@ -11,7 +11,7 @@ export class VerifyEmailService {
     private logger = new Logger(VerifyEmailService.name)
     constructor(private tokenService: TokenService, private dbService: DrizzleHealthService, private inngest: InngestHealthService) { }
 
-    async verifyEmail(token) {
+    async verifyEmail(token: string) {
         if (!token) {
             throw new BadRequestException('Invalid token');
         }

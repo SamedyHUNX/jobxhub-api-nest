@@ -41,4 +41,8 @@ export class AuthUtilsService implements OnModuleInit {
     async uploadProfileImage(imageFile: Express.Multer.File) {
         return await this.s3.uploadFileAndGetUrl(imageFile, 'users', 'avatars');
     }
+
+    async getTimestamp() {
+        return new Date().toISOString();
+    }
 }

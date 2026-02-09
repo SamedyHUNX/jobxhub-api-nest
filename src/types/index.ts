@@ -10,9 +10,9 @@ export interface User {
     imageUrl: string;
     userRole: string;
     phoneNumber: string;
-    dateOfBirth: string;
-    createdAt: string;
-    updatedAt: string;
+    dateOfBirth: Date;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 export interface UserSubscription {

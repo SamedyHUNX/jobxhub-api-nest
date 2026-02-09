@@ -6,7 +6,6 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { SignInDto, SignUpDto } from './dto/auth.dto';
 import { and, eq, gt } from 'drizzle-orm';
 import { UserTable } from '@/drizzle/schema';
@@ -15,7 +14,6 @@ import * as Sentry from '@sentry/nestjs';
 import { UserCacheService } from '@/cache/services/user-cache.service';
 import { RateLimitCacheService } from '@/cache/services/rate-limit-cache.service';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
-import { S3HealthService } from '@/s3/services/s3-health.service';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { HashingService } from '@/common/services/hashing.service';
 import { User } from '@/types';
@@ -23,32 +21,23 @@ import { TokenService } from '@/common/services/token.service';
 import { SignUpService } from './services/sign-up.service';
 import { SignInService } from './services/sign-in.service';
 import { VerifyEmailService } from './services/verify-email.service';
+import { ForgotPasswordService } from './services/forgot-password.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   constructor(
     private userCacheService: UserCacheService,
-    private jwtService: JwtService,
     private hashingService: HashingService,
-    private s3Health: S3HealthService,
-    private configService: ConfigService,
     private rateLimitCacheService: RateLimitCacheService,
-    private inngestHealth: InngestHealthService,
     private dbHealth: DrizzleHealthService,
     private tokenService: TokenService,
     private signUpService: SignUpService,
     private signInService: SignInService,
-    private verifyEmailService: VerifyEmailService
+    private verifyEmailService: VerifyEmailService,
+    private forgotPasswordService: ForgotPasswordService
   ) { }
 
-  private get inngest() {
-    return this.inngestHealth.getInngest();
-  }
-
-  private getTimestamp(): string {
-    return new Date().toISOString();
-  }
 
   private get db() {
     return this.dbHealth.getDb();
@@ -57,10 +46,6 @@ export class AuthService {
 
   private get userCache() {
     return this.userCacheService;
-  }
-
-  private get rateLimitCache() {
-    return this.rateLimitCacheService;
   }
 
   private async getCachedUserById(userId: string) {
@@ -84,21 +69,6 @@ export class AuthService {
   private async invalidateAllUserSessions(userId: string) {
     await this.userCache.invalidateAllSessions(userId);
   }
-
-  private addConstantTimeDelay = async (startTime: number) => {
-    const TARGET_RESPONSE_TIME = 600;
-    const JITTER = 100;
-
-    const elapsed = Date.now() - startTime;
-    const delay = Math.max(
-      0,
-      TARGET_RESPONSE_TIME - elapsed + Math.random() * JITTER,
-    );
-
-    if (delay > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  };
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -196,164 +166,7 @@ export class AuthService {
     acceptLanguage: string,
     ipAddress: string,
   ) => {
-    const startTime = Date.now();
-    let userExists = false;
-    let shouldSendEmail = false;
-
-    try {
-      // 1. Rate limit by IP (global)
-      const ipAttempts =
-        await this.rateLimitCache.incrementPasswordResetIpAttempts(
-          ipAddress,
-        );
-
-      if (ipAttempts > 3) {
-        this.logger.warn(
-          `Too many password reset requests from IP: ${ipAddress}`,
-        );
-
-        // Add artificial delay before throwing to prevent timing analysis
-        await this.addConstantTimeDelay(startTime);
-
-        throw new HttpException(
-          'Too many requests',
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-
-      // 2. Rate limit by email
-      const emailAttempts =
-        await this.rateLimitCache.incrementPasswordResetEmailAttempts(
-          email,
-        );
-      const emailRateLimited = emailAttempts > 3;
-
-      // Find user by email (always execute)
-      const [user] = await this.db
-        .select()
-        .from(UserTable)
-        .where(eq(UserTable.email, email))
-        .limit(1);
-
-      userExists = !!user;
-
-      // Determine if we should actually send email
-      shouldSendEmail =
-        userExists &&
-        !emailRateLimited &&
-        (!user.resetPasswordExpires ||
-          user.resetPasswordExpires <= new Date(Date.now() - 300000));
-
-      // Always generate token (even if not used) to maintain constant time
-      const {
-        token: resetToken,
-        hashedToken,
-        expiresAt,
-      } = this.tokenService.generateAndHashToken(15);
-
-      // Update database if user exists and should send email
-      if (shouldSendEmail) {
-        await this.db
-          .update(UserTable)
-          .set({
-            resetPasswordToken: hashedToken,
-            resetPasswordExpires: expiresAt,
-          })
-          .where(eq(UserTable.id, user.id));
-
-        const publicUrl = this.configService.publicUrl;
-        if (!publicUrl) {
-          this.logger.error('CLIENT_URLS is not configured');
-          throw new HttpException(
-            'Server configuration error',
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
-        }
-
-        const resetUrl = `${publicUrl}/${acceptLanguage}/reset-password?token=${resetToken}`;
-
-        // Send email asynchronously (to maintain timing)
-        this.inngest
-          .send({
-            name: 'jobxhub/user.reset_password',
-            data: {
-              email,
-              resetUrl,
-              acceptLanguage,
-            },
-          })
-          .then(() => {
-            this.logger.log(`Successfully queued password reset email for ${email}`);
-          })
-          .catch((error) => {
-            this.logger.error(`Failed to queue password reset email for ${email}:`, error);
-            Sentry.captureException(error, {
-              tags: {
-                operation: 'password_reset',
-                email_sent: 'false',
-              },
-              extra: {
-                email,
-                acceptLanguage,
-              },
-            });
-          });
-      }
-
-      // Log different scenarios to Sentry for monitoring
-      if (!userExists) {
-        this.logger.warn(
-          `Password reset requested for non-existent email: ${email} at ${this.getTimestamp()}`,
-        );
-        Sentry.captureMessage('Password reset for non-existent email', {
-          level: 'warning',
-          tags: {
-            operation: 'password_reset',
-            user_exists: 'false',
-          },
-          extra: {
-            email,
-            ipAddress,
-          },
-        });
-      } else if (emailRateLimited) {
-        this.logger.warn(`Rate limit exceeded for email: ${email}`);
-        Sentry.captureMessage('Password reset rate limit exceeded', {
-          level: 'warning',
-          tags: {
-            operation: 'password_reset',
-            rate_limited: 'true',
-          },
-          extra: {
-            email,
-            ipAddress,
-            attempts: emailAttempts,
-          },
-        });
-      }
-
-      // Add constant-time delay to normalize response time
-      await this.addConstantTimeDelay(startTime);
-
-      // Always return same response
-      return true
-    } catch (error) {
-      // Capture unexpected errors in Sentry
-      if (!(error instanceof HttpException)) {
-        Sentry.captureException(error, {
-          tags: {
-            operation: 'password_reset',
-          },
-          extra: {
-            email,
-            ipAddress,
-            acceptLanguage,
-          },
-        });
-      }
-
-      throw error;
-    }
+    return await this.forgotPasswordService.forgotPassword(email, acceptLanguage, ipAddress)
   };
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////

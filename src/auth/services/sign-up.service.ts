@@ -15,6 +15,7 @@ import { Inngest } from "inngest";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "@/drizzle/schema";
 import { AuthUtilsService } from "./auth-utils.service";
+import type { User } from "@/types";
 
 @Injectable() export class SignUpService implements OnModuleInit {
     private logger = new Logger(SignUpService.name)
@@ -64,7 +65,7 @@ import { AuthUtilsService } from "./auth-utils.service";
 
         try {
             // Create user in database
-            const user = await this.createUser({
+            const user: User = await this.createUser({
                 username,
                 password,
                 email,
@@ -146,7 +147,7 @@ import { AuthUtilsService } from "./auth-utils.service";
     }
 
     private async sendVerificationEmail(
-        user: any,
+        user: User,
         acceptLanguage: string,
         imageKey: string,
     ) {
