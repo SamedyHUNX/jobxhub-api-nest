@@ -12,6 +12,7 @@ import { CommonModule } from '@/common/common.module';
 import { SignUpService } from './services/sign-up.service';
 import { SignInService } from './services/sign-in.service';
 import { AuthUtilsService } from './services/auth-utils.service';
+import { VerifyEmailService } from './services/verify-email.service';
 
 @Module({
   imports: [
@@ -34,6 +35,6 @@ import { AuthUtilsService } from './services/auth-utils.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, SignUpService, SignInService, AuthUtilsService],
+  providers: [AuthService, JwtStrategy, SignUpService, SignInService, AuthUtilsService, VerifyEmailService],
 })
 export class AuthModule { }

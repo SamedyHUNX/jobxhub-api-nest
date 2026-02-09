@@ -7,7 +7,7 @@ import { S3HealthService } from "@/s3/services/s3-health.service";
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, OnModuleInit } from "@nestjs/common";
 import { SignUpDto } from "../dto/auth.dto";
 import { UserTable } from "@/drizzle/schema";
-import { eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { capitalizeString } from "@/utils/helpers";
 import * as Sentry from '@sentry/node';
 import { S3Service } from "@/s3/services/s3.service";
