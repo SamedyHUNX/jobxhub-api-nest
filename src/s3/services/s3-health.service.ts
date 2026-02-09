@@ -12,7 +12,7 @@ export class S3HealthService {
 
   constructor(private s3Service: S3Service) { }
 
-  get s3() {
+  s3() {
     if (!this.s3Service) {
       const message = `S3 service is down at ${new Date().toISOString()}`;
       this.logger.error(message);

@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -9,9 +8,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { SignInDto, SignUpDto } from './dtos/auth.dto';
+import { SignInDto, SignUpDto } from './dto/auth.dto';
 import { and, eq, gt, or } from 'drizzle-orm';
-import { capitalizeString } from '@/utils/helpers';
 import { UserTable } from '@/drizzle/schema';
 import { ConfigService } from '@/common/services/config.service';
 import * as Sentry from '@sentry/nestjs';
@@ -23,6 +21,8 @@ import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service'
 import { HashingService } from '@/common/services/hashing.service';
 import { User } from '@/types';
 import { TokenService } from '@/common/services/token.service';
+import { SignUpService } from './services/sign-up.service';
+import { SignInService } from './services/sign-in.service';
 
 @Injectable()
 export class AuthService {
@@ -37,6 +37,8 @@ export class AuthService {
     private inngestHealth: InngestHealthService,
     private dbHealth: DrizzleHealthService,
     private readonly tokenService: TokenService,
+    private readonly signUpService: SignUpService,
+    private readonly signInService: SignInService,
   ) { }
 
   private get inngest() {
@@ -125,166 +127,7 @@ export class AuthService {
     imageFile: Express.Multer.File,
     acceptLanguage: string,
   ) {
-    const {
-      username,
-      password,
-      email,
-      firstName,
-      lastName,
-      dateOfBirth,
-      phoneNumber,
-    } = data;
-
-    if (!imageFile) {
-      throw new BadRequestException('Profile image is required');
-    }
-
-    // Check if email or username already exists
-    const existingUser = await this.db
-      .select()
-      .from(UserTable)
-      .where(or(eq(UserTable.email, email), eq(UserTable.username, username)))
-      .limit(1);
-
-    if (existingUser.length > 0) {
-      if (existingUser[0].email === email) {
-        throw new ConflictException('Email already exists');
-      }
-      if (existingUser[0].username === username) {
-        throw new ConflictException('Username already taken');
-      }
-    }
-
-    const { key: imageKey, url: imageUrl } = await this.s3.uploadFileAndGetUrl(
-      imageFile,
-      'users',
-      'avatars',
-    );
-
-    try {
-      const hashedPassword = await this.hashPassword(password);
-      const capitalizedFirstName = capitalizeString(firstName);
-      const capitalizedLastName = capitalizeString(lastName);
-
-      const {
-        token: verificationToken,
-        hashedToken: hashedVerificationToken,
-        expiresAt: verificationExpires,
-      } = await this.tokenService.generateAndHashToken(60 * 24);
-
-      const frontendUrl = this.configService.publicUrl;
-      const locale = acceptLanguage || 'en';
-
-      if (!frontendUrl) {
-        throw new InternalServerErrorException(
-          'Application configuration error',
-        );
-      }
-
-      const verificationUrl = `${frontendUrl}/${locale}/verify-email?token=${verificationToken}`;
-
-      let user;
-
-      try {
-        [user] = await this.db
-          .insert(UserTable)
-          .values({
-            username,
-            email,
-            firstName: capitalizedFirstName,
-            lastName: capitalizedLastName,
-            dateOfBirth: new Date(dateOfBirth),
-            password: hashedPassword,
-            phoneNumber,
-            imageUrl,
-            userRole: 'USER', // For security
-            verificationToken: hashedVerificationToken,
-            verificationExpires: verificationExpires,
-          })
-          .returning();
-      } catch (dbError: any) {
-        await this.s3.deleteFile(imageKey);
-
-        // Handle unique constraint violation
-        if (dbError.code === '23505') {
-          // PostgreSQL unique violation
-          if (dbError.constraint?.includes('email')) {
-            throw new ConflictException('Email already exists');
-          }
-          if (dbError.constraint?.includes('username')) {
-            throw new ConflictException('Username already taken');
-          }
-        }
-        throw dbError;
-      }
-
-      try {
-        this.logger.log(`Sending Inngest event for user signup: ${user.email} (${user.id})`);
-        const eventData = {
-          userId: user.id,
-          email: user.email,
-          name: user.username,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          imageUrl: user.imageUrl,
-          verificationUrl,
-          acceptLanguage: locale,
-        };
-        this.logger.debug(`Inngest event data: ${JSON.stringify(eventData, null, 2)}`);
-
-        const result = await this.inngest.send({
-          name: 'jobxhub/user.created',
-          data: eventData,
-        });
-
-        this.logger.log(`Inngest event sent successfully for user: ${user.email} (${user.id})`);
-        this.logger.debug(`Inngest send result: ${JSON.stringify(result, null, 2)}`);
-      } catch (inngestError: any) {
-        // Rollback: Delete the user we just created
-        await this.db.delete(UserTable).where(eq(UserTable.id, user.id));
-
-        // Delete the uploaded image
-        await this.s3.deleteFile(imageKey);
-
-        const errorMessage = inngestError?.message || inngestError?.toString() || 'Unknown error';
-        const errorStack = inngestError?.stack || 'No stack trace available';
-
-        this.logger.error(
-          `Failed to emit user.created event for user: ${user.email} (${user.id})`,
-          errorStack,
-        );
-
-        Sentry.captureException(inngestError, {
-          tags: {
-            operation: 'signup_inngest_failed',
-          },
-          extra: {
-            userId: user.id,
-            email: user.email,
-            context: 'signup_inngest_failed',
-            errorMessage,
-            errorStack,
-          },
-        });
-
-        throw new InternalServerErrorException(
-          'Failed to complete signup. Please try again',
-        );
-      }
-
-      return true
-    } catch (error) {
-      // Cleanup orphaned file
-      this.logger.warn(
-        `Database insertion failed. Deleting orphaned file: ${imageKey}`,
-      );
-      await this.s3
-        .deleteFile(imageKey)
-        .catch((e) =>
-          this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),
-        );
-      throw error;
-    }
+    return await this.signUpService.signUp(data, imageFile, acceptLanguage);
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -402,169 +245,7 @@ export class AuthService {
 
   // Sign In
   async signIn(data: SignInDto, ipAddress: string, user: User) {
-    if (user) {
-      throw new UnauthorizedException('User already signed in');
-    }
-    const { email, password } = data;
-    const startTime = Date.now();
-
-    try {
-      if (this.configService.isProduction) {
-        // 1. Check IP-based rate limiting (global protection)
-        await this.rateLimitCache.checkIpRateLimit(ipAddress);
-
-        // 2. Check email-based rate limiting (account protection)
-        await this.rateLimitCache.checkEmailRateLimit(email);
-
-        // 3. Check for account lockout
-        const isLocked = await this.rateLimitCache.isAccountLocked(email);
-
-        if (isLocked) {
-          await this.addConstantTimeDelay(startTime);
-          throw new UnauthorizedException(
-            'Account temporarily locked due to multiple failed login attempts. Please try again later or reset your password.',
-          );
-        }
-      }
-
-      const cachedUser = await this.getCachedUser(email);
-
-      let user;
-      let passwordHash: string;
-
-      if (cachedUser) {
-        // Get user from cache
-        user = cachedUser;
-
-        const [dbStatus] = await this.db
-          .select({
-            isBanned: UserTable.isBanned,
-            isDisabled: UserTable.isDisabled,
-            isVerified: UserTable.isVerified,
-            tokenVersion: UserTable.tokenVersion,
-            password: UserTable.password,
-          })
-          .from(UserTable)
-          .where(eq(UserTable.email, email))
-          .limit(1);
-
-        if (!dbStatus) {
-          await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'user_not_found');
-          await this.addConstantTimeDelay(startTime);
-          throw new UnauthorizedException('Invalid credentials');
-        }
-
-        if (dbStatus.isBanned) {
-          await this.addConstantTimeDelay(startTime);
-          throw new UnauthorizedException('Account has been banned');
-        }
-
-        if (dbStatus.isDisabled) {
-          await this.addConstantTimeDelay(startTime);
-          throw new UnauthorizedException('Account has been disabled');
-        }
-
-        if (!dbStatus.isVerified) {
-          await this.addConstantTimeDelay(startTime);
-          throw new UnauthorizedException(
-            'Account is not verified. Please check your inbox to verify',
-          );
-        }
-
-        const { password: dbPassword, ...status } = dbStatus;
-        passwordHash = dbPassword;
-        user = { ...user, ...status };
-
-        await this.cacheUser(user);
-      } else {
-        const [dbUser] = await this.db
-          .select()
-          .from(UserTable)
-          .where(eq(UserTable.email, email))
-          .limit(1);
-
-        if (!dbUser) {
-          await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'user_not_found');
-          await this.addConstantTimeDelay(startTime);
-          throw new UnauthorizedException('Invalid credentials');
-        }
-
-        if (dbUser.isBanned) {
-          await this.addConstantTimeDelay(startTime);
-          throw new UnauthorizedException('Account has been banned');
-        }
-
-        if (dbUser.isDisabled) {
-          await this.addConstantTimeDelay(startTime);
-          throw new UnauthorizedException('Account has been disabled');
-        }
-
-        if (!dbUser.isVerified) {
-          await this.addConstantTimeDelay(startTime);
-          throw new UnauthorizedException(
-            'Account is not verified. Please check your inbox to verify',
-          );
-        }
-
-        passwordHash = dbUser.password;
-        user = dbUser;
-
-        await this.cacheUser(user);
-      }
-
-      const isPasswordValid = await this.verifyPassword(password, passwordHash);
-
-      if (!isPasswordValid) {
-        await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'invalid_password');
-        await this.addConstantTimeDelay(startTime);
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      // Successful login - clear failed attempts
-      await this.rateLimitCache.clearFailedAttempts(email, ipAddress);
-
-      const payload = {
-        email: user.email,
-        sub: user.id,
-        tokenVersion: user.tokenVersion,
-      };
-
-      const token = this.generateToken(payload);
-
-      // Log successful login
-      this.logger.log(`Successful login for user: ${email}`);
-
-      await this.addConstantTimeDelay(startTime);
-
-      return token
-    } catch (error) {
-      // Capture security-related errors in Sentry
-      if (error instanceof UnauthorizedException) {
-        Sentry.captureMessage('Failed login attempt', {
-          level: 'warning',
-          tags: {
-            operation: 'sign_in',
-            error_type: error.message,
-          },
-          extra: {
-            email,
-            ipAddress,
-          },
-        });
-      } else {
-        Sentry.captureException(error, {
-          tags: {
-            operation: 'sign_in',
-          },
-          extra: {
-            email,
-            ipAddress,
-          },
-        });
-      }
-
-      throw error;
-    }
+    return await this.signInService.signIn(data, ipAddress, user);
   }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////

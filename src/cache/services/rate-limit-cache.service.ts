@@ -369,4 +369,19 @@ export class RateLimitCacheService {
       );
     }
   }
+
+  async addConstantTimeDelay(startTime: number) {
+    const TARGET_RESPONSE_TIME = 600;
+    const JITTER = 100;
+
+    const elapsed = Date.now() - startTime;
+    const delay = Math.max(
+      0,
+      TARGET_RESPONSE_TIME - elapsed + Math.random() * JITTER,
+    );
+
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  };
 }

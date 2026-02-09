@@ -9,6 +9,9 @@ import { InngestModule } from '@/inngest/inngest.module';
 import { ConfigService } from '@/common/services/config.service';
 import { CacheModule } from '@/cache/cache.module';
 import { CommonModule } from '@/common/common.module';
+import { SignUpService } from './services/sign-up.service';
+import { SignInService } from './services/sign-in.service';
+import { AuthUtilsService } from './services/auth-utils.service';
 
 @Module({
   imports: [
@@ -31,6 +34,6 @@ import { CommonModule } from '@/common/common.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, SignUpService, SignInService, AuthUtilsService],
 })
 export class AuthModule { }

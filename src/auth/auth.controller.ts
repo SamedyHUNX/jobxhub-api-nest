@@ -20,7 +20,7 @@ import {
   ResetPasswordDto,
   SignInDto,
   SignUpDto,
-} from './dtos/auth.dto';
+} from './dto/auth.dto';
 import { ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { JwtAuthGuard } from './jwt/jwt.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';

@@ -125,7 +125,7 @@ export class UsersService {
         oldImageUrl = currentUser?.imageUrl;
 
         // Upload new image
-        const { key, url } = await this.s3.uploadFileAndGetUrl(
+        const { key, url } = await this.s3().uploadFileAndGetUrl(
           imageFile,
           'users',
           'avatars',
@@ -155,7 +155,7 @@ export class UsersService {
       if (!updatedUser) {
         // Cleanup uploaded file if update failed
         if (uploadedImageKey) {
-          await this.s3.deleteFile(uploadedImageKey);
+          await this.s3().deleteFile(uploadedImageKey);
         }
         throw new NotFoundException('User not found');
       }
@@ -165,7 +165,7 @@ export class UsersService {
         try {
           // Extract the key from the old URL
           const oldKey = oldImageUrl.split('/').slice(3).join('/');
-          await this.s3.deleteFile(oldKey);
+          await this.s3().deleteFile(oldKey);
         } catch (deleteError) {
           // Log but don't fail the request if old image deletion fails
           this.logger.warn(
@@ -189,7 +189,7 @@ export class UsersService {
         this.logger.warn(
           `Operation failed. Deleting orphaned file: ${uploadedImageKey}`,
         );
-        await this.s3
+        await this.s3()
           .deleteFile(uploadedImageKey)
           .catch((e) =>
             this.logger.error(

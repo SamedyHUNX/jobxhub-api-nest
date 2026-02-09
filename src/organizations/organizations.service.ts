@@ -154,7 +154,7 @@ export class OrganizationsService {
     }
 
     const { key: imageKey, url: imageUrl } =
-      await this.s3.uploadFileAndGetUrl(
+      await this.s3().uploadFileAndGetUrl(
         imageFile,
         'organizations',
         'logos',
@@ -178,7 +178,7 @@ export class OrganizationsService {
           .returning();
       } catch (dbError: any) {
         // Cleanup uploaded file if database insert fails
-        await this.s3.deleteFile(imageKey);
+        await this.s3().deleteFile(imageKey);
 
         // Handle unique constraint violation
         if (dbError.code === '23505') {
@@ -207,7 +207,7 @@ export class OrganizationsService {
           .where(eq(OrganizationTable.id, organization.id));
 
         // Delete the uploaded image
-        await this.s3.deleteFile(imageKey);
+        await this.s3().deleteFile(imageKey);
 
         this.logger.error(
           `Failed to create organization user settings: ${settingsError?.message ?? settingsError}`,
@@ -225,7 +225,7 @@ export class OrganizationsService {
     } catch (error) {
       // Final cleanup for any uncaught errors
       this.logger.warn(`Operation failed. Deleting orphaned file: ${imageKey}`);
-      await this.s3
+      await this.s3()
         .deleteFile(imageKey)
         .catch((e) =>
           this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),

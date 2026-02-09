@@ -18,7 +18,7 @@ export class UserCacheService {
   private readonly logger = new Logger(UserCacheService.name);
   private readonly TTL = 15 * 60 * 1000; // 15 minutes
 
-  constructor(private readonly cacheHealth: CacheHealthService) {}
+  constructor(private readonly cacheHealth: CacheHealthService) { }
 
   private get cache() {
     return this.cacheHealth.getValidatedCache();

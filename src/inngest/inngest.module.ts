@@ -3,7 +3,7 @@ import { InngestController } from './inngest.controller';
 import { UserFunctionsService } from './services/user-functions.service';
 import { InngestHealthService } from './services/inngest-health.service';
 import { CommonModule } from '@/common/common.module';
-import { InngestClientService } from './services/inngest.service';
+import { InngestClientService } from './services/inngest-client.service';
 
 @Module({
   imports: [CommonModule],
