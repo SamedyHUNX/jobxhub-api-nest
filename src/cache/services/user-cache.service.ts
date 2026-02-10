@@ -53,7 +53,6 @@ export class UserCacheService {
       this.logger.debug(`User cached: ${user.email}`);
     } catch (error) {
       this.logger.error(`Failed to cache user: ${error.message}`);
-      // Don't throw - caching failure shouldn't break the flow
     }
   }
 
@@ -95,6 +94,19 @@ export class UserCacheService {
       this.logger.log(`All sessions invalidated for user ID: ${userId}`);
     } catch (error) {
       this.logger.error(`Failed to invalidate sessions: ${error.message}`);
+    }
+  }
+
+  async revalidateUser(user: CachedUser): Promise<void> {
+    try {
+      await Promise.all([
+        this.invalidateUser(user.email, user.id),
+        this.invalidateAllSessions(user.id),
+      ]);
+      await this.setUser(user);
+      this.logger.log(`User revalidated for user ID: ${user.id}`);
+    } catch (error) {
+      this.logger.error(`Failed to revalidate user: ${error.message}`);
     }
   }
 

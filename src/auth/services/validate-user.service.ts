@@ -2,7 +2,7 @@ import { UserCacheService } from "@/cache/services/user-cache.service";
 import { UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, inArray } from "drizzle-orm";
 
 @Injectable()
 export class ValidateUserService {
@@ -58,12 +58,16 @@ export class ValidateUserService {
         }
 
         // Fetch subscription info
-        const [subscription] = await this.dbService.getDb().select()
+        const [subscription] = await this.dbService.getDb()
+            .select()
             .from(UserSubscriptionsTable)
             .where(and(
-                eq(UserSubscriptionsTable.userId, user.id), eq(UserSubscriptionsTable.status, 'active'),
-                gt(UserSubscriptionsTable.currentPeriodEnd, new Date())))
+                eq(UserSubscriptionsTable.userId, user.id),
+                inArray(UserSubscriptionsTable.status, ['active', 'trialing']),
+                gt(UserSubscriptionsTable.currentPeriodEnd, new Date())
+            ))
             .limit(1);
+
 
         const userWithSubscription = {
             ...user,
