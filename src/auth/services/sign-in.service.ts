@@ -99,7 +99,7 @@ export class SignInService {
                 passwordHash = dbPassword;
                 user = { ...user, ...status };
 
-                await this.userCacheService.setUser(user)
+                await this.userCacheService.cacheUser(user)
             } else {
                 const [dbUser] = await this.dbService.getDb()
                     .select()
@@ -133,7 +133,7 @@ export class SignInService {
                 passwordHash = dbUser.password;
                 user = dbUser;
 
-                await this.userCacheService.setUser(user)
+                await this.userCacheService.cacheUser(user)
             }
 
             const isPasswordValid = await this.hashingService.verify(passwordHash, password);

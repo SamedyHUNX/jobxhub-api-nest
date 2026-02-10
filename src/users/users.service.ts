@@ -170,7 +170,7 @@ export class UsersService {
       }
 
       // Invalidate cache for this user using the same keys as auth.service
-      await this.userCache.invalidateUser(updatedUser.email, updatedUser.id);
+      await this.userCache.invalidateUser(updatedUser.id);
 
       // Remove password from response
       const { password, ...userWithoutPassword } = updatedUser;

@@ -56,7 +56,7 @@ export class ResetPasswordService {
             .where(eq(UserTable.id, user.id));
 
         // Invalidate all cached user data
-        await this.userCacheService.invalidateUser(user.id, user.email)
+        await this.userCacheService.invalidateUser(user.id)
 
         // Invalidate all active sessions for this user
         await this.userCacheService.invalidateAllSessions(user.id);

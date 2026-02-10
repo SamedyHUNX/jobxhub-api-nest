@@ -15,12 +15,11 @@ export class StripeSubscriptionService {
     private readonly logger = new Logger(StripeSubscriptionService.name);
 
     constructor(
-        private userCacheService: UserCacheService,
+        private readonly userCacheService: UserCacheService,
         private readonly stripeClientService: StripeClientService,
         private readonly stripeCustomerService: StripeCustomerService,
         private readonly dbService: DrizzleHealthService,
     ) { }
-
 
     async createSubscription(userId: string, dto: CreateSubscriptionDto) {
         try {
@@ -29,7 +28,6 @@ export class StripeSubscriptionService {
 
             // Get price ID
             const priceId = this.stripeClientService.getPriceId[dto.planName][dto.interval];
-
 
             // Create subscription
             const subscription = await this.stripeClientService.client.subscriptions.create({
@@ -68,6 +66,12 @@ export class StripeSubscriptionService {
                 trialEnd: trial_end ? new Date(trial_end * 1000) : null,
             });
 
+            // Invalidate cache so next request gets fresh subscription data
+            await Promise.all([
+                this.userCacheService.clearUserById(userId),
+                this.userCacheService.invalidateAllSessions(userId),
+            ]);
+
             // Extract client secret from expanded invoice
             const clientSecret =
                 typeof latest_invoice === 'object' &&
@@ -94,7 +98,9 @@ export class StripeSubscriptionService {
             const priceId = this.stripeClientService.getPriceId[dto.planName!][dto.interval!];
 
             // Retrieve current subscription to get item ID
-            const currentSub = await this.stripeClientService.client.subscriptions.retrieve(subscription.stripeSubscriptionId);
+            const currentSub = await this.stripeClientService.client.subscriptions.retrieve(
+                subscription.stripeSubscriptionId
+            );
 
             const updated = await this.stripeClientService.client.subscriptions.update(
                 subscription.stripeSubscriptionId,
@@ -107,10 +113,7 @@ export class StripeSubscriptionService {
                 }
             );
 
-            const {
-                id, items,
-            } = updated;
-
+            const { items } = updated;
             const subscriptionItem = items.data[0];
 
             await this.dbService.getDb()
@@ -124,6 +127,12 @@ export class StripeSubscriptionService {
                     updatedAt: new Date(),
                 })
                 .where(eq(UserSubscriptionsTable.id, subscription.id));
+
+            // Invalidate cache so next request gets fresh subscription data
+            await Promise.all([
+                this.userCacheService.clearUserById(userId),
+                this.userCacheService.invalidateAllSessions(userId),
+            ]);
 
             return updated;
         } catch (error) {
@@ -166,6 +175,12 @@ export class StripeSubscriptionService {
                 })
                 .where(eq(UserSubscriptionsTable.id, subscription.id));
 
+            // Invalidate cache so next request gets fresh subscription data
+            await Promise.all([
+                this.userCacheService.clearUserById(userId),
+                this.userCacheService.invalidateAllSessions(userId),
+            ]);
+
             return updated;
         } catch (error) {
             Sentry.captureException(error);
@@ -197,6 +212,12 @@ export class StripeSubscriptionService {
                 })
                 .where(eq(UserSubscriptionsTable.id, subscription.id));
 
+            // Invalidate cache so next request gets fresh subscription data
+            await Promise.all([
+                this.userCacheService.clearUserById(userId),
+                this.userCacheService.invalidateAllSessions(userId),
+            ]);
+
             return updated;
         } catch (error) {
             Sentry.captureException(error);
@@ -207,7 +228,7 @@ export class StripeSubscriptionService {
 
     async getUserSubscription(userId: string) {
         try {
-            return this.dbService.getDb().query.UserSubscriptionsTable.findFirst({
+            return await this.dbService.getDb().query.UserSubscriptionsTable.findFirst({
                 where: eq(UserSubscriptionsTable.userId, userId),
                 orderBy: (table, { desc }) => [desc(table.createdAt)],
             });

@@ -3,13 +3,14 @@ import { UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { and, eq, gt, inArray } from "drizzle-orm";
+import type { PayloadType } from "../jwt/types/jwt.types";
 
 @Injectable()
 export class ValidateUserService {
     private logger = new Logger(ValidateUserService.name)
     constructor(private userCacheService: UserCacheService, private dbService: DrizzleHealthService) { }
 
-    async validateUser(payload: any) {
+    async validateUser(payload: PayloadType) {
         if (!payload) {
             throw new BadRequestException('Invalid payload');
         }
@@ -21,7 +22,7 @@ export class ValidateUserService {
             // Verify token version from cache
             if (payload.tokenVersion !== cachedUser.tokenVersion) {
                 // Token version mismatch - clear cache and reject
-                await this.userCacheService.clearUser(cachedUser)
+                await this.userCacheService.clearUserById(cachedUser.id)
                 this.logger.error(
                     `Token version mismatch for user ID ${cachedUser.id}. Token invalidated.`,
                 );
@@ -76,7 +77,7 @@ export class ValidateUserService {
         }
 
         // Cache user
-        await this.userCacheService.setUser(userWithSubscription)
+        await this.userCacheService.cacheUser(userWithSubscription)
 
         return userWithSubscription;
     };
