@@ -10,19 +10,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { S3Service } from './services/s3.service';
 import type { Response } from 'express';
-import { ConfigService } from '@/common/services/config.service';
 import { S3HealthService } from './services/s3-health.service';
 
 @Controller('upload')
 export class S3Controller {
-  constructor(private readonly s3HealthService: S3HealthService,
-    private readonly configService: ConfigService) { }
-
-  get s3() {
-    return this.s3HealthService.s3;
-  }
+  constructor(private readonly s3Service: S3HealthService) { }
 
   // Handles file upload from client
   @Post()
@@ -31,8 +24,8 @@ export class S3Controller {
   )
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('file is required');
-    const key = await this.s3().uploadFile(file);
-    const url = await this.s3().getPresignedUrl(key);
+    const key = await this.s3Service.s3().uploadFile(file);
+    const url = await this.s3Service.s3().getPresignedUrl(key);
 
     return {
       success: true,
@@ -47,21 +40,21 @@ export class S3Controller {
   // Retrieves a file directly from S3 by its key
   @Get(':key')
   async getFile(@Param('key') key: string, @Res() res: Response) {
-    const file = await this.s3().getFile(key);
+    const file = await this.s3Service.s3().getFile(key);
     res.send(file);
   }
 
   // Generates a presigned URL for a given file key.
   @Get('presigned/:key')
   async getPresignedUrl(@Param('key') key: string) {
-    const url = await this.s3().getPresignedUrl(key);
+    const url = await this.s3Service.s3().getPresignedUrl(key);
     return { url };
   }
 
   // Deletes a file from S3 by its key.
   @Delete(':key')
   async deleteFile(@Param('key') key: string) {
-    await this.s3().deleteFile(key);
+    await this.s3Service.s3().deleteFile(key);
     return { message: 'File deleted successfully' };
   }
 }

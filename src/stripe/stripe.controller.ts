@@ -51,7 +51,7 @@ export class StripeController {
     ) {
         const { successUrl, cancelUrl, ...dto } = body;
         const url = await this.stripeCheckoutService.createCheckoutSession(
-            user.id,
+            user,
             dto,
             successUrl,
             cancelUrl,
@@ -62,7 +62,7 @@ export class StripeController {
     @Get('subscription')
     @UseGuards(JwtAuthGuard)
     async getSubscription(@CurrentUser() user: User) {
-        return this.stripeSubscriptionService.getUserSubscription(user.id);
+        return this.stripeSubscriptionService.getUserSubscription(user);
     }
 
     @Put('subscription')
@@ -71,7 +71,7 @@ export class StripeController {
         @CurrentUser() user: User,
         @Body() dto: UpdateSubscriptionDto,
     ) {
-        return this.stripeSubscriptionService.updateSubscription(user.id, dto);
+        return this.stripeSubscriptionService.updateSubscription(user, dto);
     }
 
     @Delete('subscription')
@@ -80,13 +80,13 @@ export class StripeController {
         @CurrentUser() user: User,
         @Body() dto: CancelSubscriptionDto,
     ) {
-        return this.stripeSubscriptionService.cancelSubscription(user.id, dto.cancelAtPeriodEnd ?? true);
+        return this.stripeSubscriptionService.cancelSubscription(user, dto.cancelAtPeriodEnd ?? true);
     }
 
     @Post('subscription/reactivate')
     @UseGuards(JwtAuthGuard)
     async reactivateSubscription(@CurrentUser() user: User) {
-        return this.stripeSubscriptionService.reactivateSubscription(user.id);
+        return this.stripeSubscriptionService.reactivateSubscription(user);
     }
 
     @Post('billing-portal')
@@ -95,7 +95,7 @@ export class StripeController {
         @CurrentUser() user: User,
         @Body('returnUrl') returnUrl: string,
     ) {
-        const url = await this.stripeCheckoutService.createBillingPortalSession(user.id, returnUrl);
+        const url = await this.stripeCheckoutService.createBillingPortalSession(user, returnUrl);
         return { url };
     }
 

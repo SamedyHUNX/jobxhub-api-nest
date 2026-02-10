@@ -5,6 +5,7 @@ import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service"
 import { CreateSubscriptionDto } from "../dto/create-subscription.dto";
 import { StripeSubscriptionService } from "./stripe-subscription.service";
 import * as Sentry from "@sentry/nestjs";
+import type { User } from "@/types";
 
 @Injectable()
 export class StripeCheckoutService {
@@ -18,15 +19,13 @@ export class StripeCheckoutService {
     ) { }
 
     async createCheckoutSession(
-        userId: string,
+        user: User,
         dto: CreateSubscriptionDto,
         successUrl: string,
         cancelUrl: string,
     ): Promise<string> {
         try {
-            const customer = await this.stripeCustomerService.getOrCreateCustomer(userId);
-
-            console.log('hi', dto.planName, dto.interval)
+            const customer = await this.stripeCustomerService.getOrCreateCustomer(user.id);
 
             const priceId = this.stripeClientService.getPriceId(dto.planName, dto.interval);
 
@@ -45,10 +44,10 @@ export class StripeCheckoutService {
                 ...(dto.trialPeriod && {
                     subscription_data: {
                         trial_period_days: 14,
-                        metadata: { userId },
+                        metadata: { userId: user.id },
                     },
                 }),
-                metadata: { userId }, // Session metadata
+                metadata: { userId: user.id }, // Session metadata
             });
 
             return session.url!;
@@ -59,8 +58,8 @@ export class StripeCheckoutService {
         }
     }
 
-    async createBillingPortalSession(userId: string, returnUrl: string): Promise<string> {
-        const subscription = await this.stripeSubscriptionService.getUserSubscription(userId);
+    async createBillingPortalSession(user: User, returnUrl: string): Promise<string> {
+        const subscription = await this.stripeSubscriptionService.getUserSubscription(user);
 
         if (!subscription) {
             throw new NotFoundException('No subscription found');

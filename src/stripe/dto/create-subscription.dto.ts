@@ -1,7 +1,11 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
 import { PlanName, BillingInterval } from '../types/stripe.types';
 
 export class CreateSubscriptionDto {
+    @IsEmail()
+    @IsNotEmpty()
+    email: string;
+
     @IsEnum(PlanName)
     @IsNotEmpty()
     planName: PlanName;

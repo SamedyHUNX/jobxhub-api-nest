@@ -9,6 +9,7 @@ import { SubscriptionStatus } from "../types/stripe.types";
 import Stripe from 'stripe';
 import { UserCacheService } from "@/cache/services/user-cache.service";
 import * as Sentry from "@sentry/nestjs";
+import type { User } from "@/types";
 
 @Injectable()
 export class StripeSubscriptionService {
@@ -87,8 +88,8 @@ export class StripeSubscriptionService {
         }
     }
 
-    async updateSubscription(userId: string, dto: UpdateSubscriptionDto) {
-        const subscription = await this.getUserSubscription(userId);
+    async updateSubscription(user: User, dto: UpdateSubscriptionDto) {
+        const subscription = await this.getUserSubscription(user);
 
         if (!subscription) {
             throw new NotFoundException('No active subscription found');
@@ -130,8 +131,9 @@ export class StripeSubscriptionService {
 
             // Invalidate cache so next request gets fresh subscription data
             await Promise.all([
-                this.userCacheService.clearUserById(userId),
-                this.userCacheService.invalidateAllSessions(userId),
+                this.userCacheService.clearUserById(user.id),
+                this.userCacheService.clearUserByEmail(user.email),
+                this.userCacheService.invalidateAllSessions(user.id),
             ]);
 
             return updated;
@@ -142,8 +144,8 @@ export class StripeSubscriptionService {
         }
     }
 
-    async cancelSubscription(userId: string, cancelAtPeriodEnd: boolean = true) {
-        const subscription = await this.getUserSubscription(userId);
+    async cancelSubscription(user: User, cancelAtPeriodEnd: boolean = true) {
+        const subscription = await this.getUserSubscription(user);
 
         if (!subscription) {
             throw new NotFoundException('No active subscription found');
@@ -177,8 +179,9 @@ export class StripeSubscriptionService {
 
             // Invalidate cache so next request gets fresh subscription data
             await Promise.all([
-                this.userCacheService.clearUserById(userId),
-                this.userCacheService.invalidateAllSessions(userId),
+                this.userCacheService.clearUserById(user.id),
+                this.userCacheService.clearUserByEmail(user.email),
+                this.userCacheService.invalidateAllSessions(user.id),
             ]);
 
             return updated;
@@ -189,8 +192,8 @@ export class StripeSubscriptionService {
         }
     }
 
-    async reactivateSubscription(userId: string) {
-        const subscription = await this.getUserSubscription(userId);
+    async reactivateSubscription(user: User) {
+        const subscription = await this.getUserSubscription(user);
 
         if (!subscription || !subscription.cancelAtPeriodEnd) {
             throw new BadRequestException('No subscription to reactivate');
@@ -214,8 +217,9 @@ export class StripeSubscriptionService {
 
             // Invalidate cache so next request gets fresh subscription data
             await Promise.all([
-                this.userCacheService.clearUserById(userId),
-                this.userCacheService.invalidateAllSessions(userId),
+                this.userCacheService.clearUserById(user.id),
+                this.userCacheService.clearUserByEmail(user.email),
+                this.userCacheService.invalidateAllSessions(user.id),
             ]);
 
             return updated;
@@ -226,10 +230,10 @@ export class StripeSubscriptionService {
         }
     }
 
-    async getUserSubscription(userId: string) {
+    async getUserSubscription(user: User) {
         try {
             return await this.dbService.getDb().query.UserSubscriptionsTable.findFirst({
-                where: eq(UserSubscriptionsTable.userId, userId),
+                where: eq(UserSubscriptionsTable.userId, user.id),
                 orderBy: (table, { desc }) => [desc(table.createdAt)],
             });
         } catch (error) {

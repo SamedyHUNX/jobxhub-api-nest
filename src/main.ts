@@ -5,10 +5,13 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import './instrument';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { WinstonModule } from 'nest-winston';
+import { createWinstonConfig } from './logging/winston.config';
 
 async function bootstrap() {
   // Create the App
   const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger(createWinstonConfig()),
     rawBody: true,
   });
   // To access the ConfigService (Environment Variables)
