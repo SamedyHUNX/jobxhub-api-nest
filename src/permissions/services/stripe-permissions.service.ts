@@ -1,30 +1,29 @@
 import { Injectable } from "@nestjs/common";
-import { SubscriptionInterval, SubscriptionPlanName } from "@/types/enum";
-import { SubscriptionPlan, SubscriptionPlans } from "@/stripe/types/subscription-plans";
+import { getSubscriptionPlans, SubscriptionInterval, SubscriptionPlan, SubscriptionPlanName } from "@/stripe/types/subscription-plans";
 
 
 @Injectable()
 export class StripePermissionsService {
     constructor(
     ) { }
-
     // Get plan by Stripe Price ID
     getPlanByPriceId(priceId: string): {
         planName: SubscriptionPlanName;
         plan: SubscriptionPlan;
         interval: SubscriptionInterval;
     } | null {
-        for (const [key, plan] of Object.entries(SubscriptionPlans)) {
+        const plans = getSubscriptionPlans();
+        for (const [key, plan] of Object.entries(plans)) {
             if (plan.stripePriceIdMonthly === priceId) {
                 return {
-                    planName: key.toLowerCase() as SubscriptionPlanName,
+                    planName: key as SubscriptionPlanName,
                     plan,
                     interval: 'month',
                 };
             }
             if (plan.stripePriceIdAnnual === priceId) {
                 return {
-                    planName: key.toLowerCase() as SubscriptionPlanName,
+                    planName: key as SubscriptionPlanName,
                     plan,
                     interval: 'year',
                 };
@@ -38,11 +37,13 @@ export class StripePermissionsService {
         action: 'jobPostings' | 'featuredListings',
         currentCount: number,
     ): boolean {
-        const limit = SubscriptionPlans[plan].limits[action];
+        const plans = getSubscriptionPlans();
+        const limit = plans[plan].limits[action];
         return currentCount < limit;
     }
 
     isRoleAllowed(plan: SubscriptionPlanName, role: string): boolean {
-        return SubscriptionPlans[plan].allowedRoles.includes(role as any);
+        const plans = getSubscriptionPlans();
+        return plans[plan].allowedRoles.includes(role as any);
     }
 }

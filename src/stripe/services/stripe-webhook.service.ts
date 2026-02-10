@@ -19,12 +19,7 @@ export class StripeWebhookService {
     ) { }
 
     private getPlanNameFromPriceId(priceId: string): PlanName {
-        for (const [planName, prices] of Object.entries(this.stripeClientService.getPriceId)) {
-            if (prices.monthly === priceId || prices.yearly === priceId) {
-                return planName as PlanName;
-            }
-        }
-        return PlanName.BASIC; // Default fallback
+        return this.stripeClientService.getPlanNameFromPriceId(priceId);
     }
 
 

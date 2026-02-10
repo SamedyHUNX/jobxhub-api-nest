@@ -1,18 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { CacheHealthService } from "./cache-health.service";
-
-export interface CachedUser {
-  id: string;
-  email: string;
-  username: string;
-  firstName: string;
-  lastName: string;
-  imageUrl?: string;
-  userRole: string;
-  tokenVersion?: number;
-  hasSubscription?: boolean;
-  subscription?: any;
-}
+import { CachedUser } from "../types/cache.types";
 
 @Injectable()
 export class UserCacheService {

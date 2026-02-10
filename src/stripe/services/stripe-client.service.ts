@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import Stripe from 'stripe';
 import { ConfigService } from "@/common/services/config.service"
 import { PlanName, BillingInterval } from './../types/stripe.types';
-import { SubscriptionPlans } from '@/stripe/types/subscription-plans';
+import { getSubscriptionPlans } from '@/stripe/types/subscription-plans';
 
 @Injectable()
 export class StripeClientService {
@@ -17,11 +17,12 @@ export class StripeClientService {
 
     // Helper to get price ID
     getPriceId(planName: PlanName, interval: BillingInterval): string {
-        const plan = SubscriptionPlans[planName];
+        const plans = getSubscriptionPlans();
+        const plan = plans[planName];
 
         if (!plan) {
             this.logger.error(`Plan not found: ${planName}`);
-            this.logger.error(`Available plans: ${Object.keys(SubscriptionPlans).join(', ')}`);
+            this.logger.error(`Available plans: ${Object.keys(plans).join(', ')}`);
             throw new BadRequestException(`Invalid plan: ${planName}`);
         }
 
@@ -29,10 +30,12 @@ export class StripeClientService {
             ? plan.stripePriceIdMonthly
             : plan.stripePriceIdAnnual;
 
-        return priceId;
+        return priceId!;
     }
+
     getPlanNameFromPriceId(priceId: string): PlanName {
-        for (const [planName, plan] of Object.entries(SubscriptionPlans)) {
+        const plans = getSubscriptionPlans();
+        for (const [planName, plan] of Object.entries(plans)) {
             if (plan.stripePriceIdMonthly === priceId || plan.stripePriceIdAnnual === priceId) {
                 return planName as PlanName;
             }
@@ -41,7 +44,8 @@ export class StripeClientService {
     }
 
     getIntervalFromPriceId(priceId: string): BillingInterval {
-        for (const plan of Object.values(SubscriptionPlans)) {
+        const plans = getSubscriptionPlans();
+        for (const plan of Object.values(plans)) {
             if (plan.stripePriceIdMonthly === priceId) return BillingInterval.MONTH;
             if (plan.stripePriceIdAnnual === priceId) return BillingInterval.YEAR;
         }

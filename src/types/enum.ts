@@ -56,19 +56,3 @@ export const applicationStageEnum = pgEnum(
     'job_listing_applications_state',
     applicationStages,
 );
-
-// Stripe Subscription
-export const planEnum = pgEnum('stripe_subscription_plan', ['basic', 'growth', 'enterprise']);
-export const intervalEnum = pgEnum('stripe_subscription_interval', ['month', 'year']);
-export const statusEnum = pgEnum('stripe_subscription_status', [
-    'active',
-    'canceled',
-    'past_due',
-    'incomplete',
-    'incomplete_expired',
-    'trialing',
-    'unpaid'
-]);
-export type SubscriptionPlanName = typeof planEnum.enumValues[number]; // 'basic' | 'growth' | 'enterprise'
-export type SubscriptionInterval = typeof intervalEnum.enumValues[number]; // 'month' | 'year'
-export type SubscriptionStatus = typeof statusEnum.enumValues[number];

@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import * as Sentry from '@sentry/node';
 import { UserCacheService } from "@/cache/services/user-cache.service";
 import { JwtService } from '@nestjs/jwt';
+import { CachedUser } from "@/cache/types/cache.types";
 
 @Injectable()
 export class SignInService {
@@ -53,7 +54,7 @@ export class SignInService {
 
             const cachedUser = await this.userCacheService.getUserByEmail(email)
 
-            let user;
+            let user: CachedUser;
             let passwordHash: string;
 
             if (cachedUser) {

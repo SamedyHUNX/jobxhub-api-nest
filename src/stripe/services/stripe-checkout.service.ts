@@ -26,6 +26,8 @@ export class StripeCheckoutService {
         try {
             const customer = await this.stripeCustomerService.getOrCreateCustomer(userId);
 
+            console.log('hi', dto.planName, dto.interval)
+
             const priceId = this.stripeClientService.getPriceId(dto.planName, dto.interval);
 
             const session = await this.stripeClientService.client.checkout.sessions.create({

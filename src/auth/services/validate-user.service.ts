@@ -16,7 +16,7 @@ export class ValidateUserService {
         }
 
         // Try to get user from cache first
-        const cachedUser = await this.userCacheService.getUserById(payload.sub)
+        const cachedUser = await this.userCacheService.getUserByEmail(payload.email)
 
         if (cachedUser) {
             // Verify token version from cache

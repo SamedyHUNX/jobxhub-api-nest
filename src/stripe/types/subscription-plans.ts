@@ -1,4 +1,24 @@
-import { SubscriptionInterval, SubscriptionPlanName } from "@/types/enum";
+import { pgEnum } from "drizzle-orm/pg-core";
+
+// Stripe Subscription
+export const intervalEnum = pgEnum('stripe_subscription_interval', ['month', 'year']);
+export const statusEnum = pgEnum('stripe_subscription_status', [
+    'active',
+    'canceled',
+    'past_due',
+    'incomplete',
+    'incomplete_expired',
+    'trialing',
+    'unpaid'
+]);
+
+
+const plans = ['basic', 'growth', 'enterprise'] as const;
+export type SubscriptionPlanName = typeof plans[number];
+export const planEnum = pgEnum('stripe_subscription_plan', plans);
+
+export type SubscriptionInterval = typeof intervalEnum.enumValues[number]; // 'month' | 'year'
+export type SubscriptionStatus = typeof statusEnum.enumValues[number];
 
 export interface SubscriptionPlan {
     name: string;
@@ -16,10 +36,11 @@ export interface SubscriptionPlan {
 }
 
 
-export const SubscriptionPlans = {
-    Basic: {
-        name: 'Basic',
-        description: 'Perfect for small teams starting out',
+// subscription-plans.config.ts
+export const getSubscriptionPlans = () => ({
+    basic: {
+        name: 'basic',
+        description: 'Perfect for small organizations/companies',
         priceMonthly: 10,
         priceAnnual: 100,
         stripePriceIdMonthly: process.env.STRIPE_BASIC_MONTHLY_PRICE_ID,
@@ -35,9 +56,9 @@ export const SubscriptionPlans = {
             'Basic analytics',
         ],
     },
-    Growth: {
-        name: 'Growth',
-        description: 'For growing companies',
+    growth: {
+        name: 'growth',
+        description: 'For growing organizations/companies',
         priceMonthly: 25,
         priceAnnual: 200,
         stripePriceIdMonthly: process.env.STRIPE_GROWTH_MONTHLY_PRICE_ID,
@@ -54,9 +75,9 @@ export const SubscriptionPlans = {
             'Job listing management',
         ],
     },
-    Enterprise: {
-        name: 'Enterprise',
-        description: 'For large organizations',
+    enterprise: {
+        name: 'enterprise',
+        description: 'For large organizations/companies',
         priceMonthly: 100,
         priceAnnual: 1000,
         stripePriceIdMonthly: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID,
@@ -74,44 +95,5 @@ export const SubscriptionPlans = {
             'Custom integrations',
         ],
     },
-} as const;
+} as const);
 
-// Helper function to get plan by Stripe Price ID
-export function getPlanByPriceId(priceId: string): {
-    planName: SubscriptionPlanName;
-    plan: SubscriptionPlan;
-    interval: SubscriptionInterval;
-} | null {
-    for (const [key, plan] of Object.entries(SubscriptionPlans)) {
-        if (plan.stripePriceIdMonthly === priceId) {
-            return {
-                planName: key.toLowerCase() as SubscriptionPlanName,
-                plan,
-                interval: 'month',
-            };
-        }
-        if (plan.stripePriceIdAnnual === priceId) {
-            return {
-                planName: key.toLowerCase() as SubscriptionPlanName,
-                plan,
-                interval: 'year',
-            };
-        }
-    }
-    return null;
-}
-
-// Helper to check if user can perform action based on limits
-export function canPerformAction(
-    plan: SubscriptionPlanName,
-    action: 'jobPostings' | 'featuredListings',
-    currentCount: number,
-): boolean {
-    const limit = SubscriptionPlans[plan].limits[action];
-    return currentCount < limit;
-}
-
-// Helper to check if role is allowed in plan
-export function isRoleAllowed(plan: SubscriptionPlanName, role: any): boolean {
-    return SubscriptionPlans[plan].allowedRoles.includes(role);
-}
