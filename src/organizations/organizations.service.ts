@@ -189,7 +189,6 @@ export class OrganizationsService {
             description: orgDescription,
             slug: orgSlug,
             membersCount: 1,
-            createdBy: userId,
           })
           .returning();
       } catch (dbError: any) {

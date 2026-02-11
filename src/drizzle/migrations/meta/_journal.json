@@ -127,6 +127,20 @@
       "when": 1770715853073,
       "tag": "0017_shiny_millenium_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1770796624800,
+      "tag": "0018_productive_scarlet_witch",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1770797734687,
+      "tag": "0019_quiet_madame_hydra",
+      "breakpoints": true
     }
   ]
 }
