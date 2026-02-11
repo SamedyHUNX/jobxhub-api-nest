@@ -5,9 +5,10 @@ import { OrganizationsService } from './organizations.service';
 import { InngestModule } from '@/inngest/inngest.module';
 import { CommonModule } from '@/common/common.module';
 import { CacheModule } from '@/cache/cache.module';
+import { PermissionsModule } from '@/permissions/permissions.module';
 
 @Module({
-  imports: [S3Module, InngestModule, CommonModule, CacheModule],
+  imports: [S3Module, InngestModule, CommonModule, CacheModule, PermissionsModule],
   controllers: [OrganizationsController],
   providers: [OrganizationsService],
 })

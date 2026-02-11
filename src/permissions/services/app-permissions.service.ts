@@ -1,16 +1,13 @@
 import { OrganizationUserSettingsTable } from '@/drizzle/schema';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { AppRolePermissions, OrgRolePermissions } from '@/permissions/utils/role-maps';
+import type { User } from '@/types';
 import { Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 
 @Injectable()
 export class AppPermissionService {
-    constructor(private readonly dbHealth: DrizzleHealthService) { }
-
-    private get db() {
-        return this.dbHealth.getDb();
-    }
+    constructor(private readonly dbService: DrizzleHealthService) { }
 
     hasAppPermission(role: string, permission: string): boolean {
         const allowed = AppRolePermissions[role] || [];
@@ -18,7 +15,7 @@ export class AppPermissionService {
     }
 
     async hasOrgPermission(userId: string, orgId: string, permission: string): Promise<boolean> {
-        const [orgUser] = await this.db.select()
+        const [orgUser] = await this.dbService.getDb().select()
             .from(OrganizationUserSettingsTable)
             .where(
                 and(
@@ -30,7 +27,7 @@ export class AppPermissionService {
         return allowed.includes(permission);
     }
 
-    async hasPermission(user: { id: string; userRole: string }, orgId: string | null, permission: string): Promise<boolean> {
+    async hasPermission(user: User, orgId: string | null, permission: string): Promise<boolean> {
         if (this.hasAppPermission(user.userRole, permission)) return true;
 
         // If orgId is provided, check org role

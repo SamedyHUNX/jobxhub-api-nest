@@ -30,6 +30,7 @@ export interface SubscriptionPlan {
     limits: {
         jobPostings: number;
         featuredListings: number;
+        organizations: number;
     };
     allowedRoles: readonly string[];
     features: readonly string[];
@@ -48,6 +49,7 @@ export const getSubscriptionPlans = () => ({
         limits: {
             jobPostings: 5,
             featuredListings: 0,
+            organizations: 1
         },
         allowedRoles: ['APPLICANT_MANAGER'],
         features: [
@@ -66,6 +68,7 @@ export const getSubscriptionPlans = () => ({
         limits: {
             jobPostings: 10,
             featuredListings: 3,
+            organizations: 5
         },
         allowedRoles: ['APPLICANT_MANAGER', 'JOB_LISTING_MANAGER'],
         features: [
@@ -85,6 +88,7 @@ export const getSubscriptionPlans = () => ({
         limits: {
             jobPostings: 15,
             featuredListings: Infinity,
+            organizations: 10
         },
         allowedRoles: ['OWNER', 'ORG_ADMIN', 'APPLICANT_MANAGER', 'JOB_LISTING_MANAGER'],
         features: [

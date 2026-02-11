@@ -15,14 +15,17 @@ import { CreateOrganizationDto } from './dtos/organizations.dto';
 import {
   OrganizationTable,
   OrganizationUserSettingsTable,
+  UserSubscriptionsTable,
   UserTable,
 } from '@/drizzle/schema';
 import type { Cache } from 'cache-manager';
-import { and, eq, like, or, SQL } from 'drizzle-orm';
+import { and, desc, eq, like, or, SQL } from 'drizzle-orm';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { CacheHealthService } from '@/cache/services/cache-health.service';
+import { StripePermissionsService } from '@/permissions/services/stripe-permissions.service';
+import { getSubscriptionPlans } from '@/stripe/types/subscription-plans';
 
 @Injectable()
 export class OrganizationsService {
@@ -30,38 +33,18 @@ export class OrganizationsService {
 
   constructor(
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-    private dbHealth: DrizzleHealthService,
-    private s3Health: S3HealthService,
+    private dbService: DrizzleHealthService,
+    private s3Service: S3HealthService,
     private readonly configService: ConfigService,
-    private inngestHealth: InngestHealthService,
-    private cacheHealth: CacheHealthService,
+    private inngestService: InngestHealthService,
+    private cacheService: CacheHealthService,
+    private stripePermissionsService: StripePermissionsService,
   ) { }
-
-  private get cache() {
-    return this.cacheHealth.getValidatedCache();
-  }
-
-  private get inngest() {
-    return this.inngestHealth.getInngest();
-  }
-
-  private getTimestamp(): string {
-    return new Date().toISOString();
-  }
-
-  private get db() {
-    return this.dbHealth.getDb();
-  }
-
-  private get s3() {
-    return this.s3Health.s3;
-  }
-
   // Get all orgs with optional filtering
   findAll = async (userId: string, search?: string, isVerified?: boolean) => {
     const cacheKey = `orgs:all${search ? `:search:${search}` : ''}${isVerified !== undefined ? `:verified:${isVerified}` : ''}${userId ? `:user:${userId}` : ''}`;
 
-    const cached = await this.cache.get(cacheKey);
+    const cached = await this.cacheService.getValidatedCache().get(cacheKey);
     if (cached) return cached;
 
     // Build conditions array for OrganizationTable only
@@ -79,7 +62,7 @@ export class OrganizationsService {
 
     // If filtering by userId, use join query
     if (userId) {
-      const result = await this.db
+      const result = await this.dbService.getDb()
         .select()
         .from(OrganizationTable)
         .innerJoin(
@@ -97,13 +80,13 @@ export class OrganizationsService {
       organizations = result.map(row => row.organizations);
     } else {
       // No join needed
-      organizations = await this.db
+      organizations = await this.dbService.getDb()
         .select()
         .from(OrganizationTable)
         .where(conditions.length > 0 ? and(...conditions) : undefined);
     }
 
-    await this.cache.set(cacheKey, organizations, 300);
+    await this.cacheService.getValidatedCache().set(cacheKey, organizations, 300);
     return organizations;
   };
 
@@ -115,8 +98,31 @@ export class OrganizationsService {
   ) => {
     const { orgName, orgDescription, orgSlug } = data;
 
-    // Limit to 5 organizations per account
-    const userOrganizations = await this.db
+    // Get user's active subscription
+    const [userSubscription] = await this.dbService.getDb()
+      .select()
+      .from(UserSubscriptionsTable)
+      .where(eq(UserSubscriptionsTable.userId, userId))
+      .orderBy(desc(UserSubscriptionsTable.createdAt))
+      .limit(1);
+
+    // Check if user has an active subscription
+    if (!userSubscription || !this.stripePermissionsService.isSubscriptionActive(userSubscription)) {
+      throw new ForbiddenException(
+        'An active subscription is required to create organizations',
+      );
+    }
+
+    // Check if user's plan allows organization creation
+    if (!this.stripePermissionsService.isRoleAllowed(userSubscription, 'OWNER')) {
+      const reason = this.stripePermissionsService.getInactiveReason(userSubscription);
+      throw new ForbiddenException(
+        reason || 'Your subscription plan does not allow creating organizations',
+      );
+    }
+
+    // Count current organizations owned by user
+    const userOrganizations = await this.dbService.getDb()
       .select()
       .from(OrganizationUserSettingsTable)
       .where(
@@ -126,14 +132,24 @@ export class OrganizationsService {
         ),
       );
 
-    if (userOrganizations.length >= 5) {
+    const currentOrgCount = userOrganizations.length;
+
+    // Check against subscription plan limit
+    // Assuming you add 'organizations' to your action types
+    if (!this.stripePermissionsService.canPerformAction(
+      userSubscription,
+      'organizations',
+      currentOrgCount,
+    )) {
+      const plans = getSubscriptionPlans();
+      const limit = plans[userSubscription.planName].limits.organizations;
       throw new ForbiddenException(
-        'You have reached the maximum limit of 5 organizations per account',
+        `You have reached the maximum limit of ${limit} organizations for your ${userSubscription.planName} plan. Upgrade to create more organizations.`,
       );
     }
 
     // Check if organization with same orgName or slug already exists
-    const existingOrg = await this.db
+    const existingOrg = await this.dbService.getDb()
       .select()
       .from(OrganizationTable)
       .where(
@@ -154,7 +170,7 @@ export class OrganizationsService {
     }
 
     const { key: imageKey, url: imageUrl } =
-      await this.s3().uploadFileAndGetUrl(
+      await this.s3Service.s3().uploadFileAndGetUrl(
         imageFile,
         'organizations',
         'logos',
@@ -165,7 +181,7 @@ export class OrganizationsService {
 
       try {
         // Create organization
-        [organization] = await this.db
+        [organization] = await this.dbService.getDb()
           .insert(OrganizationTable)
           .values({
             orgName,
@@ -178,7 +194,7 @@ export class OrganizationsService {
           .returning();
       } catch (dbError: any) {
         // Cleanup uploaded file if database insert fails
-        await this.s3().deleteFile(imageKey);
+        await this.s3Service.s3().deleteFile(imageKey);
 
         // Handle unique constraint violation
         if (dbError.code === '23505') {
@@ -194,20 +210,20 @@ export class OrganizationsService {
 
       try {
         // Assign the creator as an owner of the organization
-        await this.db.insert(OrganizationUserSettingsTable).values({
+        await this.dbService.getDb().insert(OrganizationUserSettingsTable).values({
           userId,
           organizationId: organization.id,
           newApplicationEmailNotifications: false,
-          role: 'OWNER'
+          role: 'OWNER',
         });
       } catch (settingsError: any) {
         // Rollback: Delete the organization we just created
-        await this.db
+        await this.dbService.getDb()
           .delete(OrganizationTable)
           .where(eq(OrganizationTable.id, organization.id));
 
         // Delete the uploaded image
-        await this.s3().deleteFile(imageKey);
+        await this.s3Service.s3().deleteFile(imageKey);
 
         this.logger.error(
           `Failed to create organization user settings: ${settingsError?.message ?? settingsError}`,
@@ -218,14 +234,14 @@ export class OrganizationsService {
       }
 
       this.logger.log(
-        `Organization created with ID: ${organization.id} and assigned to user: ${userId}`,
+        `Organization created with ID: ${organization.id} and assigned to user: ${userId}. Subscription: ${userSubscription.planName}`,
       );
 
       return organization;
     } catch (error) {
       // Final cleanup for any uncaught errors
       this.logger.warn(`Operation failed. Deleting orphaned file: ${imageKey}`);
-      await this.s3()
+      await this.s3Service.s3()
         .deleteFile(imageKey)
         .catch((e) =>
           this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),
@@ -241,7 +257,7 @@ export class OrganizationsService {
       throw new BadRequestException('No userId provided');
     }
 
-    const [user] = await this.db
+    const [user] = await this.dbService.getDb()
       .select({ id: UserTable.id })
       .from(UserTable)
       .where(eq(UserTable.id, userId))
@@ -252,7 +268,7 @@ export class OrganizationsService {
       throw new NotFoundException('User not found');
     }
 
-    const orgs = await this.db
+    const orgs = await this.dbService.getDb()
       .select()
       .from(OrganizationTable)
       .innerJoin(
@@ -280,7 +296,7 @@ export class OrganizationsService {
       throw new BadRequestException('No orgId provided');
     }
 
-    const [org] = await this.db
+    const [org] = await this.dbService.getDb()
       .select()
       .from(OrganizationTable)
       .where(eq(OrganizationTable.id, orgId))
@@ -303,7 +319,7 @@ export class OrganizationsService {
       throw new BadRequestException('No orgId provided');
     }
 
-    const [org] = await this.db
+    const [org] = await this.dbService.getDb()
       .select()
       .from(OrganizationTable)
       .where(eq(OrganizationTable.id, orgId))
