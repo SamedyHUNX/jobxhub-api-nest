@@ -1,11 +1,11 @@
-import { createdAtCol, updatedAtCol } from "@/utils/helpers";
+import { createdAtCol, idCol, updatedAtCol } from "@/utils/helpers";
 import { uuid, pgTable, varchar, timestamp, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { UserTable } from "./User";
 import { relations } from "drizzle-orm";
 import { intervalEnum, planEnum, statusEnum } from "@/stripe/types/subscription-plans";
 
 export const UserSubscriptionsTable = pgTable('user_subscriptions', {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: idCol(),
     userId: uuid('user_id')
         .notNull()
         .references(() => UserTable.id, { onDelete: 'cascade' }),
