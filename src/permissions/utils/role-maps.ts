@@ -17,6 +17,7 @@ export const OrgRolePermissions: Record<string, string[]> = {
     OWNER: [
         Permissions.UPDATE_ORG,
         Permissions.DELETE_ORG,
+        Permissions.CREATE_ORG,
         Permissions.CREATE_JOB_LISTING,
         Permissions.UPDATE_JOB_LISTING,
         Permissions.DELETE_JOB_LISTING,

@@ -49,8 +49,9 @@ export class OrganizationsController {
     @Body() createOrganizationDto: CreateOrganizationDto,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: User,
+    @SelectedOrgId() orgId: string,
   ) {
-    await this.orgsService.create(createOrganizationDto, file, user.id);
+    await this.orgsService.create(createOrganizationDto, file, user.id, orgId);
 
     return {
       statusCode: 200,

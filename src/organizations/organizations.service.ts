@@ -26,6 +26,7 @@ import { S3HealthService } from '@/s3/services/s3-health.service';
 import { CacheHealthService } from '@/cache/services/cache-health.service';
 import { StripePermissionsService } from '@/permissions/services/stripe-permissions.service';
 import { getSubscriptionPlans } from '@/stripe/types/subscription-plans';
+import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -39,6 +40,7 @@ export class OrganizationsService {
     private inngestService: InngestHealthService,
     private cacheService: CacheHealthService,
     private stripePermissionsService: StripePermissionsService,
+    private appPermissionService: AppPermissionService,
   ) { }
   // Get all orgs with optional filtering
   findAll = async (userId: string, search?: string, isVerified?: boolean) => {
@@ -95,6 +97,7 @@ export class OrganizationsService {
     data: CreateOrganizationDto,
     imageFile: Express.Multer.File,
     userId: string,
+    orgId: string,
   ) => {
     const { orgName, orgDescription, orgSlug } = data;
 
@@ -106,18 +109,25 @@ export class OrganizationsService {
       .orderBy(desc(UserSubscriptionsTable.createdAt))
       .limit(1);
 
-    // Check if user has an active subscription
-    if (!userSubscription || !this.stripePermissionsService.isSubscriptionActive(userSubscription)) {
+    // Check if user's plan allows organization creation
+    // if (!this.stripePermissionsService.isRoleAllowed(userSubscription, 'OWNER')) {
+    //   const reason = this.stripePermissionsService.getInactiveReason(userSubscription);
+    //   throw new ForbiddenException(
+    //     reason || 'Your subscription plan does not allow creating organizations',
+    //   );
+    // }
+
+    if (!this.appPermissionService.hasOrgPermission(userId, orgId, 'CREATE_ORG')) {
       throw new ForbiddenException(
-        'An active subscription is required to create organizations',
+        'You do not have permission to create organizations',
       );
     }
 
-    // Check if user's plan allows organization creation
-    if (!this.stripePermissionsService.isRoleAllowed(userSubscription, 'OWNER')) {
-      const reason = this.stripePermissionsService.getInactiveReason(userSubscription);
+
+    // Check if user has an active subscription
+    if (!userSubscription || !this.stripePermissionsService.isSubscriptionActive(userSubscription)) {
       throw new ForbiddenException(
-        reason || 'Your subscription plan does not allow creating organizations',
+        'An active subscription is required. Please check your subscriptions',
       );
     }
 
