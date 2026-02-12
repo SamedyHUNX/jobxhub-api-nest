@@ -7,12 +7,13 @@ import type { User } from '@/types';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import { ConfigService } from '@/common/services/config.service';
 import * as Sentry from '@sentry/nestjs';
+import { JobListingsUtilsService } from './services/job-listings-utils.service';
 
 @Injectable()
 export class JobListingsService {
   private readonly logger = new Logger(JobListingsService.name);
 
-  constructor(private dbHealth: DrizzleHealthService, private appPermission: AppPermissionService, private readonly config: ConfigService) { }
+  constructor(private dbHealth: DrizzleHealthService, private appPermission: AppPermissionService, private readonly config: ConfigService, private readonly jobListingsUtilsService: JobListingsUtilsService) { }
 
   private get db() {
     return this.dbHealth.getDb();
@@ -22,30 +23,16 @@ export class JobListingsService {
     const { ...jobData } = data;
 
     // Verify org exists
-    const [org] = await this.db
-      .select()
-      .from(OrganizationTable)
-      .where(eq(OrganizationTable.id, orgId));
+    const org = await this.jobListingsUtilsService.checkIfOrgExists(orgId);
 
     if (!org) {
       throw new NotFoundException('The organization does not exist');
     }
 
     // Verify user is owner of the organization
-    const [membership] = await this.db
-      .select({
-        role: OrganizationUserSettingsTable.role,
-      })
-      .from(OrganizationUserSettingsTable)
-      .where(
-        and(
-          eq(OrganizationUserSettingsTable.organizationId, orgId),
-          eq(OrganizationUserSettingsTable.userId, userId)
-        )
-      )
-      .limit(1);
+    const membership = await this.jobListingsUtilsService.checkIfUserIsOwner(userId, orgId);
 
-    if (!membership || membership.role !== 'OWNER') {
+    if (!membership) {
       throw new ForbiddenException(
         'You are not authorized to create job listings for this organization'
       );
@@ -126,11 +113,7 @@ export class JobListingsService {
 
   // Find job listings based on id
   findOne = async (id: string, userId: string, orgId: string) => {
-    const [jobListing] = await this.db
-      .select()
-      .from(JobListingTable)
-      .where(eq(JobListingTable.id, id))
-      .limit(1);
+    const jobListing = await this.jobListingsUtilsService.getJobListing(id);
 
     if (!jobListing) {
       throw new NotFoundException('Job listing not found');
@@ -147,10 +130,7 @@ export class JobListingsService {
       throw new ForbiddenException('You are not authorized to update this job listing');
     }
 
-    const [jobListing] = await this.db
-      .select()
-      .from(JobListingTable)
-      .where(eq(JobListingTable.id, jobId))
+    const jobListing = await this.jobListingsUtilsService.getJobListing(jobId);
 
     if (!jobListing) {
       throw new NotFoundException('Job listing not found');
