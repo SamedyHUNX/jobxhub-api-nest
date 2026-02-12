@@ -344,18 +344,18 @@ export class OrganizationsService {
     orgId: string,
     imageFile?: Express.Multer.File,
   ) => {
-    const { orgName, description } = dto;
-
     if (!this.appPermissionService.hasPermission(user, null, Permissions.UPDATE_ORG)) {
       throw new UnauthorizedException("You cannot update this org's data")
     }
+
+    const { orgName, description, slug } = dto;
 
     if (!orgId) {
       throw new BadRequestException('User is not associated with an organization');
     }
 
     // Variable to track uploaded image for cleanup
-    let uploadedImageKey: string | undefined;
+    let uploadedImageKey: string | undefined | null;
 
     try {
       // Check if orgName is being updated and if it's already taken
@@ -381,6 +381,7 @@ export class OrganizationsService {
 
       if (orgName !== undefined) updateData.orgName = orgName;
       if (description !== undefined) updateData.description = description;
+      if (slug !== undefined) updateData.slug = slug;
 
       // Handle image upload if provided
       let oldImageUrl: string | undefined | null;

@@ -124,12 +124,14 @@ export class OrganizationsController {
 
   @Put('org/:orgId')
   @UseGuards(JwtAuthGuard)
-  async update(@CurrentUser() user: User,
+  @UseInterceptors(FileInterceptor('image'))
+  async update(
+    @CurrentUser() user: User,
     @Body() updatedOrgDto: UpdateOrganizationDto,
-    @UploadedFile(new ImageValidationPipe())
     @Param('orgId', IdValidationPipe) orgId: string,
-    image?: Express.Multer.File,
+    @UploadedFile(new ImageValidationPipe()) imageFile?: Express.Multer.File,
   ) {
+    console.log('data received', updatedOrgDto, orgId, imageFile);
     const org = await this.orgsService.update(user, updatedOrgDto, orgId, imageFile);
 
     return {
@@ -138,4 +140,5 @@ export class OrganizationsController {
       },
     };
   }
+
 }

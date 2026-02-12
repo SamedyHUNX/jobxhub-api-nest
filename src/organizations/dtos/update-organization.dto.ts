@@ -3,10 +3,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateOrganizationDto {
     @ApiPropertyOptional()
-    @IsUUID()
-    orgId: string;
-
-    @ApiPropertyOptional()
     @IsOptional()
     @IsString()
     @MinLength(1)
@@ -19,4 +15,9 @@ export class UpdateOrganizationDto {
     @MinLength(10)
     @MaxLength(500)
     description?: string;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsString()
+    slug?: string;
 }

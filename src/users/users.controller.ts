@@ -28,7 +28,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   async getAllUsers(@CurrentUser() user: User) {
-    const users = await this.usersService.getAll(user.id, user.userRole);
+    const users = await this.usersService.getAll(user);
 
     if (!users) {
       return {
