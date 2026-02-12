@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { JobListingsService } from './job-listings.service';
+import { JobListingsService } from './services/job-listings.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { CreateJobListingDto, UpdateJobListingDto } from './dto/job-listings.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';

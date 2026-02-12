@@ -1,13 +1,13 @@
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
-import { CreateJobListingDto, UpdateJobListingDto } from './dto/job-listings.dto';
+import { CreateJobListingDto, UpdateJobListingDto } from '../dto/job-listings.dto';
 import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable } from '@/drizzle/schema';
 import { and, eq, like, or } from 'drizzle-orm';
 import type { User } from '@/types';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import { ConfigService } from '@/common/services/config.service';
 import * as Sentry from '@sentry/nestjs';
-import { JobListingsUtilsService } from './services/job-listings-utils.service';
+import { JobListingsUtilsService } from './job-listings-utils.service';
 
 @Injectable()
 export class JobListingsService {

@@ -13,7 +13,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { OrganizationsService } from './organizations.service';
+import { OrganizationsService } from './services/organizations.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MulterExceptionFilter } from '@/utils/multer-global-handling';
@@ -74,7 +74,7 @@ export class OrganizationsController {
       isVerified === 'true' ? true : isVerified === 'false' ? false : undefined;
 
     const allOrganizations = await this.orgsService.findAll(
-      user.id,
+      user,
       search,
       isVerifiedBool
     );

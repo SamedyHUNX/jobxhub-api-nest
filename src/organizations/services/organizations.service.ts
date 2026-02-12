@@ -11,12 +11,12 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { CreateOrganizationDto } from './dtos/create-organization.dto';
+import { CreateOrganizationDto } from '../dtos/create-organization.dto';
+import { UpdateOrganizationDto } from '../dtos/update-organization.dto';
 import {
   OrganizationTable,
   OrganizationUserSettingsTable,
   UserSubscriptionsTable,
-  UserTable,
 } from '@/drizzle/schema';
 import type { Cache } from 'cache-manager';
 import { and, desc, eq, like, not, or, SQL } from 'drizzle-orm';
@@ -28,8 +28,8 @@ import { SubscriptionPermissionsService } from '@/permissions/services/subscript
 import { getSubscriptionPlans } from '@/stripe/types/subscription-plans';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import type { User } from '@/types';
-import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 import { Permissions } from '@/permissions/utils/app-permissions';
+import { OrganizationsUtilsService } from './organizations-util.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -44,10 +44,21 @@ export class OrganizationsService {
     private cacheService: CacheHealthService,
     private subscriptionPermissionsService: SubscriptionPermissionsService,
     private appPermissionService: AppPermissionService,
+    private organizationsUtilsService: OrganizationsUtilsService,
   ) { }
   // Get all orgs with optional filtering
-  findAll = async (userId: string, search?: string, isVerified?: boolean) => {
-    const cacheKey = `orgs:all${search ? `:search:${search}` : ''}${isVerified !== undefined ? `:verified:${isVerified}` : ''}${userId ? `:user:${userId}` : ''}`;
+  findAll = async (
+    requestingUser: User,
+    search?: string,
+    isVerified?: boolean
+  ) => {
+    // Security check: Only SUPER-ADMIN can fetch all organizations without userId filter
+    const isSuperAdmin = requestingUser.userRole === 'SUPER-ADMIN';
+
+    // Force userId to be the requesting user's ID unless they're SUPER-ADMIN
+    const effectiveUserId = isSuperAdmin ? undefined : requestingUser.id;
+
+    const cacheKey = `orgs:all${search ? `:search:${search}` : ''}${isVerified !== undefined ? `:verified:${isVerified}` : ''}${effectiveUserId ? `:user:${effectiveUserId}` : ''}`;
 
     const cached = await this.cacheService.getValidatedCache().get(cacheKey);
     if (cached) return cached;
@@ -65,8 +76,8 @@ export class OrganizationsService {
 
     let organizations;
 
-    // If filtering by userId, use join query
-    if (userId) {
+    // If filtering by userId (either forced or SUPER-ADMIN viewing specific user), use join query
+    if (effectiveUserId) {
       const result = await this.dbService.getDb()
         .select()
         .from(OrganizationTable)
@@ -76,7 +87,7 @@ export class OrganizationsService {
         )
         .where(
           and(
-            eq(OrganizationUserSettingsTable.userId, userId),
+            eq(OrganizationUserSettingsTable.userId, effectiveUserId),
             conditions.length > 0 ? and(...conditions) : undefined
           )
         );
@@ -84,7 +95,7 @@ export class OrganizationsService {
       // Extract just the organization objects from the join result
       organizations = result.map(row => row.organizations);
     } else {
-      // No join needed
+      // Only SUPER-ADMIN reaches here - fetch all organizations
       organizations = await this.dbService.getDb()
         .select()
         .from(OrganizationTable)
@@ -255,30 +266,14 @@ export class OrganizationsService {
 
   // Get organizations by user ID
   findByUser = async (userId: string) => {
-    if (!userId) {
-      this.logger.error('Missing userId');
-      throw new BadRequestException('No userId provided');
-    }
-
-    const [user] = await this.dbService.getDb()
-      .select({ id: UserTable.id })
-      .from(UserTable)
-      .where(eq(UserTable.id, userId))
-      .limit(1);
+    const user = await this.organizationsUtilsService.findUserByUserId(userId);
 
     if (!user) {
       this.logger.error(`User with id ${userId} not found`);
       throw new NotFoundException('User not found');
     }
 
-    const orgs = await this.dbService.getDb()
-      .select()
-      .from(OrganizationTable)
-      .innerJoin(
-        OrganizationUserSettingsTable,
-        eq(OrganizationTable.id, OrganizationUserSettingsTable.organizationId),
-      )
-      .where(eq(OrganizationUserSettingsTable.userId, userId));
+    const orgs = await this.organizationsUtilsService.findUserOrganizations(userId);
 
     if (!orgs || orgs.length === 0) {
       throw new NotFoundException(
@@ -294,16 +289,7 @@ export class OrganizationsService {
 
   // Get a single organization by ID
   findOne = async (orgId: string) => {
-    if (!orgId) {
-      this.logger.error('Missing orgId');
-      throw new BadRequestException('No orgId provided');
-    }
-
-    const [org] = await this.dbService.getDb()
-      .select()
-      .from(OrganizationTable)
-      .where(eq(OrganizationTable.id, orgId))
-      .limit(1);
+    const org = await this.organizationsUtilsService.findOrganizationById(orgId);
 
     if (!org) {
       this.logger.error(`Organization with ID ${orgId} not found`);
@@ -317,16 +303,7 @@ export class OrganizationsService {
 
   // Get selected organization by ID
   findSelected = async (orgId: string) => {
-    if (!orgId) {
-      this.logger.error('Missing orgId');
-      throw new BadRequestException('No orgId provided');
-    }
-
-    const [org] = await this.dbService.getDb()
-      .select()
-      .from(OrganizationTable)
-      .where(eq(OrganizationTable.id, orgId))
-      .limit(1);
+    const org = await this.organizationsUtilsService.findOrganizationById(orgId);
 
     if (!org) {
       this.logger.error(`Organization with ID ${orgId} not found`);
