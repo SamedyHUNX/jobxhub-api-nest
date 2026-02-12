@@ -51,7 +51,7 @@ export class OrganizationsController {
     @CurrentUser() user: User,
     @SelectedOrgId() orgId: string,
   ) {
-    await this.orgsService.create(createOrganizationDto, file, user.id, orgId);
+    await this.orgsService.create(createOrganizationDto, file, user, orgId);
 
     return {
       statusCode: 200,

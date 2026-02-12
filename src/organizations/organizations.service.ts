@@ -10,7 +10,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import * as Sentry from '@sentry/nestjs';
 import { CreateOrganizationDto } from './dtos/organizations.dto';
 import {
   OrganizationTable,
@@ -27,6 +26,7 @@ import { CacheHealthService } from '@/cache/services/cache-health.service';
 import { StripePermissionsService } from '@/permissions/services/stripe-permissions.service';
 import { getSubscriptionPlans } from '@/stripe/types/subscription-plans';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
+import type { User } from '@/types';
 
 @Injectable()
 export class OrganizationsService {
@@ -96,7 +96,7 @@ export class OrganizationsService {
   create = async (
     data: CreateOrganizationDto,
     imageFile: Express.Multer.File,
-    userId: string,
+    user: User,
     orgId: string,
   ) => {
     const { orgName, orgDescription, orgSlug } = data;
@@ -105,20 +105,15 @@ export class OrganizationsService {
     const [userSubscription] = await this.dbService.getDb()
       .select()
       .from(UserSubscriptionsTable)
-      .where(eq(UserSubscriptionsTable.userId, userId))
+      .where(eq(UserSubscriptionsTable.userId, user.id))
       .orderBy(desc(UserSubscriptionsTable.createdAt))
       .limit(1);
 
-    const allRoles = this.stripePermissionsService.getAvailableRoles(userSubscription);
-
-    console.log('pdiddy', allRoles) // 'APPLICANT_MANAGER'
-
-    if (!this.appPermissionService.hasOrgPermission(userId, orgId, 'OWNER')) {
+    if (!this.appPermissionService.hasPermission(user, orgId, 'OWNER')) {
       throw new ForbiddenException(
         'You do not have permission to create organizations',
       );
     }
-
 
     // Check if user has an active subscription
     if (!userSubscription || !this.stripePermissionsService.isSubscriptionActive(userSubscription)) {
@@ -133,7 +128,7 @@ export class OrganizationsService {
       .from(OrganizationUserSettingsTable)
       .where(
         and(
-          eq(OrganizationUserSettingsTable.userId, userId),
+          eq(OrganizationUserSettingsTable.userId, user.id),
           eq(OrganizationUserSettingsTable.role, 'OWNER'),
         ),
       );
@@ -216,7 +211,7 @@ export class OrganizationsService {
       try {
         // Assign the creator as an owner of the organization
         await this.dbService.getDb().insert(OrganizationUserSettingsTable).values({
-          userId,
+          userId: user.id,
           organizationId: organization.id,
           newApplicationEmailNotifications: false,
           role: 'OWNER',
@@ -239,7 +234,7 @@ export class OrganizationsService {
       }
 
       this.logger.log(
-        `Organization created with ID: ${organization.id} and assigned to user: ${userId}. Subscription: ${userSubscription.planName}`,
+        `Organization created with ID: ${organization.id} and assigned to user: ${user.id}. Subscription: ${userSubscription.planName}`,
       );
 
       return organization;

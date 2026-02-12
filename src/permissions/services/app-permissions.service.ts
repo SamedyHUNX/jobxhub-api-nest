@@ -9,18 +9,20 @@ import { and, eq } from 'drizzle-orm';
 export class AppPermissionService {
     constructor(private readonly dbService: DrizzleHealthService) { }
 
-    hasAppPermission(role: string, permission: string): boolean {
+    private hasAppPermission(role: string, permission: string): boolean {
         const allowed = AppRolePermissions[role] || [];
         return allowed.includes(permission);
     }
 
-    async hasOrgPermission(userId: string, orgId: string, permission: string): Promise<boolean> {
+    private async hasOrgPermission(userId: string, orgId: string, permission: string): Promise<boolean> {
         const [orgUser] = await this.dbService.getDb().select()
             .from(OrganizationUserSettingsTable)
             .where(
                 and(
                     eq(OrganizationUserSettingsTable.userId, userId),
-                    eq(OrganizationUserSettingsTable.organizationId, orgId)))
+                    eq(OrganizationUserSettingsTable.organizationId, orgId)
+                )
+            );
         if (!orgUser) return false;
 
         const allowed = OrgRolePermissions[orgUser.role] || [];
@@ -29,12 +31,7 @@ export class AppPermissionService {
 
     async hasPermission(user: User, orgId: string | null, permission: string): Promise<boolean> {
         if (this.hasAppPermission(user.userRole, permission)) return true;
-
-        // If orgId is provided, check org role
-        if (orgId) {
-            return this.hasOrgPermission(user.id, orgId, permission);
-        }
-
+        if (orgId) return this.hasOrgPermission(user.id, orgId, permission);
         return false;
     }
 }
