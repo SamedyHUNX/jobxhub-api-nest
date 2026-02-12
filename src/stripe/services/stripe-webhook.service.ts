@@ -3,10 +3,11 @@ import { StripeClientService } from "./stripe-client.service";
 import { ConfigService } from "@/common/services/config.service";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import Stripe from 'stripe';
-import { ExpandedInvoice, PlanName, SubscriptionStatus } from "../types/stripe.types";
+import { ExpandedInvoice } from "../types/stripe.types";
 import { eq } from "drizzle-orm";
 import { PaymentHistoryTable, UserSubscriptionsTable } from "@/drizzle/schema";
 import * as Sentry from '@sentry/node';
+import { PlanName, SubscriptionStatus } from "../types/stripe.enums";
 
 @Injectable()
 export class StripeWebhookService {

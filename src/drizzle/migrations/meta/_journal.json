@@ -148,6 +148,20 @@
       "when": 1770798935559,
       "tag": "0020_sturdy_krista_starr",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1739340000000,
+      "tag": "0021_fix_stripe_enums",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1739340060000,
+      "tag": "0022_add_missing_columns",
+      "breakpoints": true
     }
   ]
 }

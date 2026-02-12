@@ -1,25 +1,3 @@
-import { pgEnum } from "drizzle-orm/pg-core";
-
-// Stripe Subscription
-export const intervalEnum = pgEnum('stripe_subscription_interval', ['month', 'year']);
-export const statusEnum = pgEnum('stripe_subscription_status', [
-    'active',
-    'canceled',
-    'past_due',
-    'incomplete',
-    'incomplete_expired',
-    'trialing',
-    'unpaid'
-]);
-
-
-const plans = ['basic', 'growth', 'enterprise'] as const;
-export type SubscriptionPlanName = typeof plans[number];
-export const planEnum = pgEnum('stripe_subscription_plan', plans);
-
-export type SubscriptionInterval = typeof intervalEnum.enumValues[number]; // 'month' | 'year'
-export type SubscriptionStatus = typeof statusEnum.enumValues[number];
-
 export interface SubscriptionPlan {
     name: string;
     description: string;

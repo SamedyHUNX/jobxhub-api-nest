@@ -70,6 +70,8 @@ export class ValidateUserService {
             .limit(1);
 
 
+
+
         const userWithSubscription = {
             ...user,
             hasSubscription: !!subscription,

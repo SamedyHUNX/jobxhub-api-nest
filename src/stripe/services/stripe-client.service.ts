@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import Stripe from 'stripe';
 import { ConfigService } from "@/common/services/config.service"
-import { PlanName, BillingInterval } from './../types/stripe.types';
+import { PlanName, BillingInterval } from './../types/stripe.enums';
 import { getSubscriptionPlans } from '@/stripe/types/subscription-plans';
 
 @Injectable()

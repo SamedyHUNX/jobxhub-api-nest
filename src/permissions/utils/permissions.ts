@@ -12,6 +12,7 @@ export const Permissions = {
     READ_USER: 'READ_USER',
     CREATE_USER: 'CREATE_USER',
     UPDATE_USER: 'UPDATE_USER',
+    UPDATE_MY_PROFILE: 'UPDATE_MY_PROFILE',
     DELETE_USER: 'DELETE_USER',
 
     // Organization Management

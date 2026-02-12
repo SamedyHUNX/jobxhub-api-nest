@@ -29,7 +29,6 @@ import { PermissionsModule } from './permissions/permissions.module';
     StripeModule,
     PermissionsModule,
     SentryModule.forRoot(),
-
   ],
   controllers: [AppController],
   providers: [

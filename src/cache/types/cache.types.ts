@@ -1,4 +1,4 @@
-import { planEnum } from "@/stripe/types/subscription-plans";
+import { planEnum } from "@/stripe/types/stripe.enums";
 
 
 export interface SubscriptionItem {
@@ -8,12 +8,12 @@ export interface SubscriptionItem {
     quantity: number;
 }
 
-export type PlanName = (typeof planEnum.enumValues)[number];
+export type CachedPlanName = (typeof planEnum.enumValues)[number];
 
 export interface Subscription {
     id: string;
     userId: string;
-    planName: PlanName;
+    planName: CachedPlanName;
     status: string;
     stripeCustomerId: string;
     stripeSubscriptionId: string;

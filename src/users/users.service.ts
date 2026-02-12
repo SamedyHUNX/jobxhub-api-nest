@@ -14,25 +14,17 @@ import { S3HealthService } from '@/s3/services/s3-health.service';
 import { UserCacheService } from '@/cache/services/user-cache.service';
 import { Permissions } from '@/permissions/utils/permissions';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
+import type { User } from '@/types';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   constructor(
     private dbService: DrizzleService,
-    private s3Health: S3HealthService,
+    private s3Service: S3HealthService,
     private userCacheService: UserCacheService,
     private readonly appPermission: AppPermissionService
   ) { }
-
-  private get userCache() {
-    return this.userCacheService;
-  }
-
-
-  private get s3() {
-    return this.s3Health.s3;
-  }
 
   getAll = async (userId: string, userRole: string) => {
     if (!this.appPermission.hasAppPermission(userRole, Permissions.READ_ALL_USERS)) {
@@ -70,11 +62,15 @@ export class UsersService {
   }
 
   update = async (
-    userId: string,
+    user: User,
     data: UpdatedMeDataDto,
     imageFile?: Express.Multer.File,
   ) => {
     const { firstName, lastName, username, phoneNumber } = data;
+
+    if (!this.appPermission.hasAppPermission(user.userRole, Permissions.UPDATE_MY_PROFILE)) {
+      throw new UnauthorizedException('You cannot update your profile')
+    }
 
     // Variable to track uploaded image for cleanup
     let uploadedImageKey: string | undefined;
@@ -88,7 +84,7 @@ export class UsersService {
           .where(
             and(
               eq(UserTable.username, username),
-              not(eq(UserTable.id, userId)),
+              not(eq(UserTable.id, user.id)),
             ),
           )
           .limit(1);
@@ -114,13 +110,13 @@ export class UsersService {
         const [currentUser] = await this.dbService.db
           .select({ imageUrl: UserTable.imageUrl })
           .from(UserTable)
-          .where(eq(UserTable.id, userId))
+          .where(eq(UserTable.id, user.id))
           .limit(1);
 
         oldImageUrl = currentUser?.imageUrl;
 
         // Upload new image
-        const { key, url } = await this.s3().uploadFileAndGetUrl(
+        const { key, url } = await this.s3Service.s3().uploadFileAndGetUrl(
           imageFile,
           'users',
           'avatars',
@@ -144,13 +140,13 @@ export class UsersService {
           ...updateData,
           updatedAt: new Date(),
         })
-        .where(eq(UserTable.id, userId))
+        .where(eq(UserTable.id, user.id))
         .returning();
 
       if (!updatedUser) {
         // Cleanup uploaded file if update failed
         if (uploadedImageKey) {
-          await this.s3().deleteFile(uploadedImageKey);
+          await this.s3Service.s3().deleteFile(uploadedImageKey);
         }
         throw new NotFoundException('User not found');
       }
@@ -160,22 +156,22 @@ export class UsersService {
         try {
           // Extract the key from the old URL
           const oldKey = oldImageUrl.split('/').slice(3).join('/');
-          await this.s3().deleteFile(oldKey);
+          await this.s3Service.s3().deleteFile(oldKey);
         } catch (deleteError) {
           // Log but don't fail the request if old image deletion fails
           this.logger.warn(
-            `Failed to delete old image for user ${userId}: ${deleteError}`,
+            `Failed to delete old image for user ${user.id}: ${deleteError}`,
           );
         }
       }
 
       // Invalidate cache for this user using the same keys as auth.service
-      await this.userCache.invalidateUser(updatedUser.id);
+      await this.userCacheService.invalidateUser(updatedUser.id);
 
       // Remove password from response
       const { password, ...userWithoutPassword } = updatedUser;
 
-      this.logger.log(`User ${userId} updated their profile`);
+      this.logger.log(`User ${user.id} updated their profile`);
 
       return userWithoutPassword;
     } catch (error) {
@@ -184,7 +180,7 @@ export class UsersService {
         this.logger.warn(
           `Operation failed. Deleting orphaned file: ${uploadedImageKey}`,
         );
-        await this.s3()
+        await this.s3Service.s3()
           .deleteFile(uploadedImageKey)
           .catch((e) =>
             this.logger.error(
@@ -192,7 +188,7 @@ export class UsersService {
             ),
           );
       }
-      this.logger.error(`Failed to update user ${userId}:`, error);
+      this.logger.error(`Failed to update user ${user.id}:`, error);
       throw error;
     }
   };

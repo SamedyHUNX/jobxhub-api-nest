@@ -67,7 +67,7 @@ export class UsersController {
     @UploadedFile(new ImageValidationPipe())
     image?: Express.Multer.File,
   ) {
-    const updatedUserData = await this.usersService.update(user.id, updatedMeData, image);
+    const updatedUserData = await this.usersService.update(user, updatedMeData, image);
 
     if (updatedUserData) {
       return {

@@ -2,7 +2,7 @@ import { createdAtCol, idCol, updatedAtCol } from "@/utils/helpers";
 import { uuid, pgTable, varchar, timestamp, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { UserTable } from "./User";
 import { relations } from "drizzle-orm";
-import { intervalEnum, planEnum, statusEnum } from "@/stripe/types/subscription-plans";
+import { intervalEnum, planEnum, statusEnum } from "@/stripe/types/stripe.enums";
 
 export const UserSubscriptionsTable = pgTable('user_subscriptions', {
     id: idCol(),

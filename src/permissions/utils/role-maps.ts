@@ -35,6 +35,7 @@ export const OrgRolePermissions: Record<string, string[]> = {
         // Usually read‑only or limited org permissions
         Permissions.READ_JOB_LISTING,
         Permissions.READ_APPLICANT,
+        Permissions.UPDATE_MY_PROFILE
     ],
 
     APPLICANT_MANAGER: [

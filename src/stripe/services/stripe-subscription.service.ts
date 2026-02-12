@@ -5,11 +5,11 @@ import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service"
 import { CreateSubscriptionDto, UpdateSubscriptionDto } from "../dto/create-subscription.dto";
 import { UserSubscriptionsTable } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { SubscriptionStatus } from "../types/stripe.types";
 import Stripe from 'stripe';
 import { UserCacheService } from "@/cache/services/user-cache.service";
 import * as Sentry from "@sentry/nestjs";
 import type { User } from "@/types";
+import { SubscriptionStatus } from "../types/stripe.enums";
 
 @Injectable()
 export class StripeSubscriptionService {
