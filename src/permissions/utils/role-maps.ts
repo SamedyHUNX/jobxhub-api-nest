@@ -1,4 +1,4 @@
-import { Permissions } from './permissions';
+import { Permissions } from './app-permissions';
 
 export const AppRolePermissions: Record<string, string[]> = {
     SUPER_ADMIN: [

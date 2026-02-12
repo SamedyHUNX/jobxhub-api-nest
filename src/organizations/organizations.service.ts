@@ -109,15 +109,11 @@ export class OrganizationsService {
       .orderBy(desc(UserSubscriptionsTable.createdAt))
       .limit(1);
 
-    // Check if user's plan allows organization creation
-    // if (!this.stripePermissionsService.isRoleAllowed(userSubscription, 'OWNER')) {
-    //   const reason = this.stripePermissionsService.getInactiveReason(userSubscription);
-    //   throw new ForbiddenException(
-    //     reason || 'Your subscription plan does not allow creating organizations',
-    //   );
-    // }
+    const allRoles = this.stripePermissionsService.getAvailableRoles(userSubscription);
 
-    if (!this.appPermissionService.hasOrgPermission(userId, orgId, 'CREATE_ORG')) {
+    console.log('pdiddy', allRoles) // 'APPLICANT_MANAGER'
+
+    if (!this.appPermissionService.hasOrgPermission(userId, orgId, 'OWNER')) {
       throw new ForbiddenException(
         'You do not have permission to create organizations',
       );

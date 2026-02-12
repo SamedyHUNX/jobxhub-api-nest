@@ -130,4 +130,22 @@ export class StripePermissionsService {
 
         return null;
     }
+
+    /**
+   * Get all roles that can be assigned in the current subscription plan
+   */
+    getAvailableRoles(subscription: {
+        planName: SubscriptionPlanName;
+        status: string;
+        currentPeriodEnd: Date;
+        canceledAt?: Date | null;
+        trialEnd?: Date | null;
+    }): readonly string[] {
+        if (!this.isSubscriptionActive(subscription)) {
+            return [];
+        }
+
+        const plans = getSubscriptionPlans();
+        return plans[subscription.planName].allowedRoles;
+    }
 }

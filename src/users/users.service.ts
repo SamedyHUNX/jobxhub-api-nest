@@ -12,7 +12,7 @@ import { UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { UserCacheService } from '@/cache/services/user-cache.service';
-import { Permissions } from '@/permissions/utils/permissions';
+import { Permissions } from '@/permissions/utils/app-permissions';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import type { User } from '@/types';
 
