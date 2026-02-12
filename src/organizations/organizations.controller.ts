@@ -131,7 +131,6 @@ export class OrganizationsController {
     @Param('orgId', IdValidationPipe) orgId: string,
     @UploadedFile(new ImageValidationPipe()) imageFile?: Express.Multer.File,
   ) {
-    console.log('data received', updatedOrgDto, orgId, imageFile);
     const org = await this.orgsService.update(user, updatedOrgDto, orgId, imageFile);
 
     return {

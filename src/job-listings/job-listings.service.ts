@@ -163,6 +163,18 @@ export class JobListingsService {
       throw new ForbiddenException('You cannot update this job listing');
     }
 
+    // Handle publishing logic
+    let postedAt = dto.postedAt ? new Date(dto.postedAt) : undefined;
+
+    // If status is changing from draft to published, set postedAt to now
+    if (dto.status === 'published' && jobListing.status === 'draft' && !postedAt) {
+      postedAt = new Date();
+    }
+
+    // If status is changing from published to draft, clear postedAt
+    if (dto.status === 'draft' && jobListing.status === 'published') {
+      postedAt = undefined;
+    }
 
     try {
       await this.db
@@ -179,7 +191,7 @@ export class JobListingsService {
           experienceLevel: dto.experienceLevel,
           status: dto.status,
           type: dto.type,
-          postedAt: dto.postedAt ? new Date(dto.postedAt) : undefined,
+          postedAt: postedAt,
         })
         .where(eq(JobListingTable.id, jobId));
     } catch (error) {

@@ -100,6 +100,7 @@ export class JobListingsController {
 
   // Update a job listing: PUT /job-listings/:jobId
   @Put('/:jobId')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   async update(
     @Body() updateJobListingDto: UpdateJobListingDto,
