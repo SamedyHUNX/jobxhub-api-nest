@@ -26,8 +26,8 @@ export class UsersService {
     private readonly appPermission: AppPermissionService
   ) { }
 
-  getAll = async (userId: string, userRole: string) => {
-    if (!this.appPermission.hasAppPermission(userRole, Permissions.READ_ALL_USERS)) {
+  getAll = async (user: User) => {
+    if (!this.appPermission.hasPermission(user, null, Permissions.READ_ALL_USERS)) {
       throw new UnauthorizedException('You cannot access this feature')
     }
 
@@ -47,7 +47,7 @@ export class UsersService {
           updatedAt: UserTable.updatedAt,
         })
         .from(UserTable)
-        .where(not(eq(UserTable.id, userId)))
+        .where(not(eq(UserTable.id, user.id)))
         .limit(10);
 
 
@@ -68,7 +68,7 @@ export class UsersService {
   ) => {
     const { firstName, lastName, username, phoneNumber } = data;
 
-    if (!this.appPermission.hasAppPermission(user.userRole, Permissions.UPDATE_MY_PROFILE)) {
+    if (!this.appPermission.hasPermission(user, null, Permissions.UPDATE_MY_PROFILE)) {
       throw new UnauthorizedException('You cannot update your profile')
     }
 

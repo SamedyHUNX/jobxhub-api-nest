@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseFilters,
@@ -16,12 +17,13 @@ import { OrganizationsService } from './organizations.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MulterExceptionFilter } from '@/utils/multer-global-handling';
-import { CreateOrganizationDto } from './dtos/organizations.dto';
+import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { IdValidationPipe } from '@/utils/image-validation-pipe';
+import { IdValidationPipe, ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
 import type { User } from '@/types';
+import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 
 @Controller('organizations')
 export class OrganizationsController {
@@ -112,6 +114,23 @@ export class OrganizationsController {
   @Get('org/:id')
   async findOne(@Param('id', IdValidationPipe) id: string) {
     const org = await this.orgsService.findOne(id);
+
+    return {
+      data: {
+        orgs: org,
+      },
+    };
+  }
+
+  @Put('org/:orgId')
+  @UseGuards(JwtAuthGuard)
+  async update(@CurrentUser() user: User,
+    @Body() updatedOrgDto: UpdateOrganizationDto,
+    @UploadedFile(new ImageValidationPipe())
+    @Param('orgId', IdValidationPipe) orgId: string,
+    image?: Express.Multer.File,
+  ) {
+    const org = await this.orgsService.update(user, updatedOrgDto, orgId, imageFile);
 
     return {
       data: {

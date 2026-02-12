@@ -3,7 +3,7 @@ import { getSubscriptionPlans } from "@/stripe/types/subscription-plans";
 import { SubscriptionPlanName } from "@/stripe/types/stripe.enums";
 
 @Injectable()
-export class StripePermissionsService {
+export class SubscriptionPermissionsService {
     constructor() { }
 
     /**

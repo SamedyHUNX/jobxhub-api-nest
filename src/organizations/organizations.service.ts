@@ -9,8 +9,9 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { CreateOrganizationDto } from './dtos/organizations.dto';
+import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import {
   OrganizationTable,
   OrganizationUserSettingsTable,
@@ -18,15 +19,17 @@ import {
   UserTable,
 } from '@/drizzle/schema';
 import type { Cache } from 'cache-manager';
-import { and, desc, eq, like, or, SQL } from 'drizzle-orm';
+import { and, desc, eq, like, not, or, SQL } from 'drizzle-orm';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { CacheHealthService } from '@/cache/services/cache-health.service';
-import { StripePermissionsService } from '@/permissions/services/stripe-permissions.service';
+import { SubscriptionPermissionsService } from '@/permissions/services/subscription-permissions.service';
 import { getSubscriptionPlans } from '@/stripe/types/subscription-plans';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import type { User } from '@/types';
+import { UpdateOrganizationDto } from './dtos/update-organization.dto';
+import { Permissions } from '@/permissions/utils/app-permissions';
 
 @Injectable()
 export class OrganizationsService {
@@ -39,7 +42,7 @@ export class OrganizationsService {
     private readonly configService: ConfigService,
     private inngestService: InngestHealthService,
     private cacheService: CacheHealthService,
-    private stripePermissionsService: StripePermissionsService,
+    private subscriptionPermissionsService: SubscriptionPermissionsService,
     private appPermissionService: AppPermissionService,
   ) { }
   // Get all orgs with optional filtering
@@ -116,7 +119,7 @@ export class OrganizationsService {
     }
 
     // Check if user has an active subscription
-    if (!userSubscription || !this.stripePermissionsService.isSubscriptionActive(userSubscription)) {
+    if (!userSubscription || !this.subscriptionPermissionsService.isSubscriptionActive(userSubscription)) {
       throw new ForbiddenException(
         'An active subscription is required. Please check your subscriptions',
       );
@@ -137,7 +140,7 @@ export class OrganizationsService {
 
     // Check against subscription plan limit
     // Assuming you add 'organizations' to your action types
-    if (!this.stripePermissionsService.canPerformAction(
+    if (!this.subscriptionPermissionsService.canPerformAction(
       userSubscription,
       'organizations',
       currentOrgCount,
@@ -333,5 +336,130 @@ export class OrganizationsService {
     }
 
     return org;
+  };
+
+  update = async (
+    user: User,
+    dto: UpdateOrganizationDto,
+    orgId: string,
+    imageFile?: Express.Multer.File,
+  ) => {
+    const { orgName, description } = dto;
+
+    if (!this.appPermissionService.hasPermission(user, null, Permissions.UPDATE_ORG)) {
+      throw new UnauthorizedException("You cannot update this org's data")
+    }
+
+    if (!orgId) {
+      throw new BadRequestException('User is not associated with an organization');
+    }
+
+    // Variable to track uploaded image for cleanup
+    let uploadedImageKey: string | undefined;
+
+    try {
+      // Check if orgName is being updated and if it's already taken
+      if (orgName) {
+        const existingOrg = await this.dbService.getDb()
+          .select()
+          .from(OrganizationTable)
+          .where(
+            and(
+              eq(OrganizationTable.orgName, orgName),
+              not(eq(OrganizationTable.id, orgId)),
+            ),
+          )
+          .limit(1);
+
+        if (existingOrg.length > 0) {
+          throw new ConflictException('Organization name already exists');
+        }
+      }
+
+      // Build update object with only provided fields
+      const updateData: Partial<typeof OrganizationTable.$inferInsert> = {};
+
+      if (orgName !== undefined) updateData.orgName = orgName;
+      if (description !== undefined) updateData.description = description;
+
+      // Handle image upload if provided
+      let oldImageUrl: string | undefined | null;
+
+      if (imageFile) {
+        // Get the current image URL to delete later
+        const [currentOrg] = await this.dbService.getDb()
+          .select({ imageUrl: OrganizationTable.imageUrl })
+          .from(OrganizationTable)
+          .where(eq(OrganizationTable.id, orgId))
+          .limit(1);
+
+        oldImageUrl = currentOrg?.imageUrl;
+
+        // Upload new image
+        const { key, url } = await this.s3Service.s3().uploadFileAndGetUrl(
+          imageFile,
+          'organizations',
+          'logos',
+        );
+
+        uploadedImageKey = key;
+        updateData.imageUrl = url;
+      }
+
+      // Only proceed if there's data to update
+      if (Object.keys(updateData).length === 0) {
+        throw new BadRequestException('No fields to update');
+      }
+
+      // Perform the update
+      const [updatedOrg] = await this.dbService.getDb()
+        .update(OrganizationTable)
+        .set({
+          ...updateData,
+          updatedAt: new Date(),
+        })
+        .where(eq(OrganizationTable.id, orgId))
+        .returning();
+
+      if (!updatedOrg) {
+        // Cleanup uploaded file if update failed
+        if (uploadedImageKey) {
+          await this.s3Service.s3().deleteFile(uploadedImageKey);
+        }
+        throw new NotFoundException('Organization not found'); // Fixed: was "User not found"
+      }
+
+      // Delete old image from S3 if a new one was uploaded
+      if (oldImageUrl && uploadedImageKey) {
+        try {
+          // Extract the key from the old URL
+          const oldKey = oldImageUrl.split('/').slice(3).join('/');
+          await this.s3Service.s3().deleteFile(oldKey);
+        } catch (deleteError) {
+          // Log but don't fail the request if old image deletion fails
+          this.logger.warn(
+            `Failed to delete old image for organization ${orgId}: ${deleteError}`,
+          );
+        }
+      }
+
+      return updatedOrg;
+    } catch (error) {
+      // Cleanup uploaded image if something went wrong
+      if (uploadedImageKey) {
+        this.logger.warn(
+          `Operation failed. Deleting orphaned file: ${uploadedImageKey}`,
+        );
+        await this.s3Service.s3()
+          .deleteFile(uploadedImageKey)
+          .catch((e) =>
+            this.logger.error(
+              `Failed to delete ${uploadedImageKey}: ${e.message}`,
+            ),
+          );
+      }
+      this.logger.error(`Failed to update organization ${orgId}:`, error);
+      throw error;
+    }
   };
 }

@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AppPermissionService } from "./services/app-permissions.service";
-import { StripePermissionsService } from "./services/stripe-permissions.service";
+import { StripePermissionsService } from "./services/subscription-permissions.service";
 import { CommonModule } from "@/common/common.module";
 
 @Module({
