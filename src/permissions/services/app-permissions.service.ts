@@ -1,42 +1,17 @@
-import { OrganizationUserSettingsTable, UserSubscriptionsTable } from '@/drizzle/schema';
-import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
-import { AppRolePermissions, PermissionSets } from '@/permissions/utils/role-maps';
+import { AppRolePermissionSets, PermissionSets } from '@/permissions/utils/role-maps';
 import type { User } from '@/types';
 import { Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
 import { SubscriptionPermissionsService } from './subscription-permissions.service';
 import { getSubscriptionPlans } from '@/stripe/types/subscription-plans';
+import { DatabaseUtilsService } from '@/common/services/database-utils.service';
 
 @Injectable()
 export class AppPermissionService {
-    constructor(private readonly dbService: DrizzleHealthService, private readonly subscriptionService: SubscriptionPermissionsService) { }
+    constructor(private readonly subscriptionService: SubscriptionPermissionsService, private dbUtilsService: DatabaseUtilsService) { }
 
     private hasAppPermission(role: string, permission: string): boolean {
-        const allowed = AppRolePermissions[role] || [];
+        const allowed = AppRolePermissionSets[role] || [];
         return allowed.includes(permission);
-    }
-
-    private async getOrgUser(userId: string, orgId: string) {
-        const [orgUser] = await this.dbService.getDb().select()
-            .from(OrganizationUserSettingsTable)
-            .where(
-                and(
-                    eq(OrganizationUserSettingsTable.userId, userId),
-                    eq(OrganizationUserSettingsTable.organizationId, orgId)
-                )
-            );
-        return orgUser;
-    }
-
-    private async getUserSubscription(userId: string) {
-        const [userSubscription] = await this.dbService.getDb().select()
-            .from(UserSubscriptionsTable)
-            .where(
-                and(
-                    eq(UserSubscriptionsTable.userId, userId)
-                )
-            );
-        return userSubscription;
     }
 
     /**
@@ -46,19 +21,20 @@ export class AppPermissionService {
      * 2. Additional permission sets granted by the subscription plan
      */
     private async getOrgPermissions(userId: string, orgId: string): Promise<string[]> {
-        const orgUser = await this.getOrgUser(userId, orgId);
-        if (!orgUser) return [];
+        const orgUser = await this.dbUtilsService.getOrgsForUserId(userId);
+        const org = orgUser.find((org) => org.organizationId === orgId);
+        if (!org) return [];
 
         // Start with base role permissions
-        const basePermissions = PermissionSets[orgUser.role] || [];
+        const basePermissions = PermissionSets[org.role] || [];
 
         // Only apply subscription benefits if user is OWNER of the org
-        if (orgUser.role !== 'OWNER') {
+        if (org.role !== 'OWNER') {
             return basePermissions; // MEMBERs only get their base permissions
         }
 
         // Get subscription and add granted permission sets (only for OWNERs)
-        const subscription = await this.getUserSubscription(userId);
+        const subscription = await this.dbUtilsService.getUserSubscription(userId);
         if (!subscription || !this.subscriptionService.isSubscriptionActive(subscription)) {
             return basePermissions;
         }

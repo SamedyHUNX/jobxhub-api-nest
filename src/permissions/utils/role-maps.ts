@@ -1,6 +1,6 @@
 import { Permissions } from './app-permissions';
 
-export const AppRolePermissions: Record<string, string[]> = {
+export const AppRolePermissionSets: Record<string, string[]> = {
     SUPER_ADMIN: [
         Permissions.READ_ALL_USERS,
         Permissions.CREATE_USER,
@@ -29,6 +29,7 @@ export const PermissionSets: Record<string, string[]> = {
         Permissions.APPROVE_APPLICANT,
         Permissions.READ_JOB_LISTING,
         Permissions.READ_APPLICANT,
+        Permissions.UPDATE_MY_PROFILE
         // Add org‑level management permissions
     ],
 

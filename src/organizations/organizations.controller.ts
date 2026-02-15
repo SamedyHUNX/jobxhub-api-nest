@@ -98,30 +98,6 @@ export class OrganizationsController {
     };
   }
 
-  // Get selected organization by ID: GET /organizations/selected
-  @Get('org/selected')
-  async findSelected(@SelectedOrgId() orgId: string) {
-    const org = await this.orgsService.findSelected(orgId);
-
-    return {
-      data: {
-        orgs: org,
-      },
-    };
-  }
-
-  // Get a single organization by ID: GET /organizations/:id
-  @Get('org/:id')
-  async findOne(@Param('id', IdValidationPipe) id: string) {
-    const org = await this.orgsService.findOne(id);
-
-    return {
-      data: {
-        orgs: org,
-      },
-    };
-  }
-
   @Put('org/:orgId')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('image'))

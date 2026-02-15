@@ -16,7 +16,6 @@ import { UpdateOrganizationDto } from '../dtos/update-organization.dto';
 import {
   OrganizationTable,
   OrganizationUserSettingsTable,
-  UserSubscriptionsTable,
 } from '@/drizzle/schema';
 import type { Cache } from 'cache-manager';
 import { and, desc, eq, like, not, or, SQL } from 'drizzle-orm';
@@ -29,7 +28,7 @@ import { getSubscriptionPlans } from '@/stripe/types/subscription-plans';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import type { User } from '@/types';
 import { Permissions } from '@/permissions/utils/app-permissions';
-import { OrganizationsUtilsService } from './organizations-util.service';
+import { DatabaseUtilsService } from '@/common/services/database-utils.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -44,7 +43,7 @@ export class OrganizationsService {
     private cacheService: CacheHealthService,
     private subscriptionPermissionsService: SubscriptionPermissionsService,
     private appPermissionService: AppPermissionService,
-    private organizationsUtilsService: OrganizationsUtilsService,
+    private dbUtilsService: DatabaseUtilsService,
   ) { }
   // Get all orgs with optional filtering
   findAll = async (
@@ -116,18 +115,7 @@ export class OrganizationsService {
     const { orgName, orgDescription, orgSlug } = data;
 
     // Get user's active subscription
-    const [userSubscription] = await this.dbService.getDb()
-      .select()
-      .from(UserSubscriptionsTable)
-      .where(eq(UserSubscriptionsTable.userId, user.id))
-      .orderBy(desc(UserSubscriptionsTable.createdAt))
-      .limit(1);
-
-    if (!this.appPermissionService.hasPermission(user, orgId, 'OWNER')) {
-      throw new ForbiddenException(
-        'You do not have permission to create organizations',
-      );
-    }
+    const userSubscription = await this.dbUtilsService.getUserSubscription(user.id);
 
     // Check if user has an active subscription
     if (!userSubscription || !this.subscriptionPermissionsService.isSubscriptionActive(userSubscription)) {
@@ -136,25 +124,32 @@ export class OrganizationsService {
       );
     }
 
-    // Count current organizations owned by user
-    const userOrganizations = await this.dbService.getDb()
-      .select()
-      .from(OrganizationUserSettingsTable)
-      .where(
-        and(
-          eq(OrganizationUserSettingsTable.userId, user.id),
-          eq(OrganizationUserSettingsTable.role, 'OWNER'),
-        ),
+    if (!this.appPermissionService.hasPermission(user, orgId, 'OWNER')) {
+      throw new ForbiddenException(
+        'You do not have permission to create organizations',
       );
+    }
 
-    const currentOrgCount = userOrganizations.length;
+    // Count current organizations owned by user
+    const userOrgs = await this.dbUtilsService.getOrgsForUserId(user.id);
+
+    if (!userOrgs) {
+      throw new NotFoundException(`User ${user.id} not found`);
+    }
+
+    const ownedOrgs = userOrgs.filter(org => org.role === 'OWNER');
+    if (!ownedOrgs) {
+      throw new NotFoundException(`User ${user.id} not found`);
+    }
+
+    const currentOwnedOrgCount = ownedOrgs.length;
 
     // Check against subscription plan limit
     // Assuming you add 'organizations' to your action types
     if (!this.subscriptionPermissionsService.canPerformAction(
       userSubscription,
       'organizations',
-      currentOrgCount,
+      currentOwnedOrgCount,
     )) {
       const plans = getSubscriptionPlans();
       const limit = plans[userSubscription.planName].limits.organizations;
@@ -266,14 +261,14 @@ export class OrganizationsService {
 
   // Get organizations by user ID
   findByUser = async (userId: string) => {
-    const user = await this.organizationsUtilsService.findUserByUserId(userId);
+    const user = await this.dbUtilsService.findUserByUserId(userId);
 
     if (!user) {
       this.logger.error(`User with id ${userId} not found`);
       throw new NotFoundException('User not found');
     }
 
-    const orgs = await this.organizationsUtilsService.findUserOrganizations(userId);
+    const orgs = await this.dbUtilsService.getOrgsForUserId(userId);
 
     if (!orgs || orgs.length === 0) {
       throw new NotFoundException(
@@ -281,38 +276,7 @@ export class OrganizationsService {
       );
     }
 
-    // Extract only the organization data from the join result
-    const organizations = orgs.map((item) => item.organizations);
-
-    return organizations;
-  };
-
-  // Get a single organization by ID
-  findOne = async (orgId: string) => {
-    const org = await this.organizationsUtilsService.findOrganizationById(orgId);
-
-    if (!org) {
-      this.logger.error(`Organization with ID ${orgId} not found`);
-      throw new NotFoundException(
-        'No organizations found. Please consider creating one',
-      );
-    }
-
-    return org;
-  };
-
-  // Get selected organization by ID
-  findSelected = async (orgId: string) => {
-    const org = await this.organizationsUtilsService.findOrganizationById(orgId);
-
-    if (!org) {
-      this.logger.error(`Organization with ID ${orgId} not found`);
-      throw new NotFoundException(
-        'No organizations found. Please consider creating one',
-      );
-    }
-
-    return org;
+    return orgs;
   };
 
   update = async (
