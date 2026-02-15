@@ -18,7 +18,6 @@ import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { User } from '@/types';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
-import { IdValidationPipe } from '@/utils/image-validation-pipe';
 
 @ApiTags('job-listings')
 @Controller('job-listings')
@@ -89,7 +88,7 @@ export class JobListingsController {
     @CurrentUser() user: User,
     @SelectedOrgId() orgId: string,
   ) {
-    const jobListing = await this.jobListingsService.create(createJobListingDto, user.id, orgId);
+    const jobListing = await this.jobListingsService.create(createJobListingDto, user, orgId);
 
     return {
       message: 'Job created successfully',

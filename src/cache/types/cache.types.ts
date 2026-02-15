@@ -39,6 +39,6 @@ export interface CachedUser {
     imageUrl?: string;
     userRole: string;
     tokenVersion?: number;
-    hasSubscription?: boolean;
+    hasActiveSubscription?: boolean;
     subscription?: Subscription;
 }

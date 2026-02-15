@@ -15,6 +15,7 @@ import { ForgotPasswordService } from './services/forgot-password.service';
 import { ResetPasswordService } from './services/reset-password.service';
 import { SignOutService } from './services/sign-out.service';
 import { ValidateUserService } from './services/validate-user.service';
+import { PermissionsModule } from '@/permissions/permissions.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ValidateUserService } from './services/validate-user.service';
     InngestModule,
     CacheModule,
     CommonModule,
+    PermissionsModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {

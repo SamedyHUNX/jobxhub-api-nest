@@ -170,7 +170,7 @@ export class AuthController {
     @Ip() ipAddress: string,
     @Res() res: Response,
   ) {
-    const success = this.forgotPasswordService.forgotPassword(email, acceptLanguage, ipAddress);
+    const success = await this.forgotPasswordService.forgotPassword(email, acceptLanguage, ipAddress);
     if (!success) {
       return res.json({
         statusCode: 400,

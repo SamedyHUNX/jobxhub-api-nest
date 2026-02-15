@@ -9,7 +9,7 @@ export class DatabaseUtilsService {
     constructor(private dbService: DrizzleHealthService) { }
 
     // UserTable
-    findUserByUserIdOrEmail = async (userId?: string, email?: string) => {
+    findUserByUserIdOrEmail = async (userId: string | null | undefined, email: string | null | undefined) => {
         if (!userId && !email) {
             this.logger.error('Missing userId or email');
             throw new BadRequestException('No userId or email provided');

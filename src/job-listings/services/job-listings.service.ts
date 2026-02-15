@@ -13,9 +13,13 @@ import { DatabaseUtilsService } from '@/common/services/database-utils.service';
 export class JobListingsService {
   private readonly logger = new Logger(JobListingsService.name);
 
-  constructor(private dbService: DrizzleHealthService, private appPermission: AppPermissionService, private readonly config: ConfigService, private dbUtilsService: DatabaseUtilsService) { }
+  constructor(private dbService: DrizzleHealthService, private appPermission: AppPermissionService, private readonly config: ConfigService, private dbUtilsService: DatabaseUtilsService, private appPermissionService: AppPermissionService) { }
 
-  create = async (data: CreateJobListingDto, userId: string, orgId: string) => {
+  create = async (data: CreateJobListingDto, user: User, orgId: string) => {
+    if (!this.appPermissionService.hasPermission(user, orgId, 'CREATE_JOB_LISTING')) {
+      throw new ForbiddenException('You are not authorized to create job listings for this organization');
+    }
+
     const { ...jobData } = data;
 
     // Verify org exists
@@ -26,7 +30,7 @@ export class JobListingsService {
     }
 
     // Verify user is owner of the organization
-    const isOwner = await this.dbUtilsService.checkIfUserIsOrgOwner(userId, orgId);
+    const isOwner = await this.dbUtilsService.checkIfUserIsOrgOwner(user.id, orgId);
 
     if (!isOwner) {
       throw new ForbiddenException(
@@ -47,7 +51,7 @@ export class JobListingsService {
       .returning();
 
     this.logger.log(
-      `Job listing created with ID: ${jobListing.id} for organization: ${orgId} by user: ${userId}`,
+      `Job listing created with ID: ${jobListing.id} for organization: ${orgId} by user: ${user.id}`,
     );
 
     return jobListing
