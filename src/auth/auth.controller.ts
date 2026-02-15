@@ -51,12 +51,12 @@ export class AuthController {
     }),
   )
   async signUp(
-    @Body() data: SignUpDto,
+    @Body() dto: SignUpDto,
     @UploadedFile(new ImageValidationPipe()) image: Express.Multer.File,
     @Headers('accept-language') acceptLanguage: string,
     @Res() res: Response,
   ) {
-    const success = await this.signUpService.signUp(data, image, acceptLanguage);
+    const success = await this.signUpService.signUp(dto, image, acceptLanguage);
     if (success) {
       return res.json({
         statusCode: 200,
@@ -102,12 +102,11 @@ export class AuthController {
   @HttpCode(200)
   @Post('sign-in')
   async signIn(
-    @Body() data: SignInDto,
+    @Body() dto: SignInDto,
     @Res() res: Response,
     @Ip() ipAddress: string,
-    @CurrentUser() user: any,
   ) {
-    const token = await this.signInService.signIn(data, ipAddress, user);
+    const token = await this.signInService.signIn(dto, ipAddress);
     if (!token) {
       return res.json({
         statusCode: 400,
@@ -216,7 +215,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Sign out' })
   @Post('sign-out')
   @UseGuards(JwtAuthGuard)
-  async signOut(@Res() res: Response, @CurrentUser() user: any) {
+  async signOut(@Res() res: Response, @CurrentUser() user: User) {
     await this.signOutService.signOut(user.id);
 
     // Clear the cookie

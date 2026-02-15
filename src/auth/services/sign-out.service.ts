@@ -30,7 +30,6 @@ export class SignOutService {
                 .where(eq(UserTable.id, userId));
 
             // 3. Clear user cache
-            await this.userCacheService.invalidateUser(user.id);
             await this.userCacheService.clearUserById(user.id);
             await this.userCacheService.clearUserByEmail(user.email)
             // 4. Invalidate all sessions

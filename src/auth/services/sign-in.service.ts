@@ -30,11 +30,9 @@ export class SignInService {
     ) {
     }
 
-    async signIn(data: SignInDto, ipAddress: string, user: User) {
-        if (user) {
-            throw new UnauthorizedException('User already signed in');
-        }
-        const { email, password } = data;
+    async signIn(dto: SignInDto, ipAddress: string) {
+        const { email, password } = dto;
+
         const startTime = Date.now();
 
         try {

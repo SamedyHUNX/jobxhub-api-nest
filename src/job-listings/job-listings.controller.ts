@@ -91,11 +91,11 @@ export class JobListingsController {
     const jobListing = await this.jobListingsService.create(createJobListingDto, user, orgId);
 
     return {
+      statusCode: 201,
       message: 'Job created successfully',
       data: {
         jobListings: [jobListing],
       },
-      statusCode: 201
     };
   }
 
