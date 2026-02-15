@@ -10,8 +10,8 @@ import { UserTable } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { capitalizeString } from "@/utils/helpers";
 import * as Sentry from '@sentry/node';
-import { AuthUtilsService } from "./auth-utils.service";
 import type { User } from "@/types";
+import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 
 @Injectable() export class SignUpService {
     private logger = new Logger(SignUpService.name)
@@ -23,7 +23,7 @@ import type { User } from "@/types";
         private readonly inngestService: InngestHealthService,
         private readonly dbService: DrizzleHealthService,
         private readonly tokenService: TokenService,
-        private readonly authUtilService: AuthUtilsService,
+        private readonly dbUtilService: DatabaseUtilsService
     ) { }
 
     async signUp(
@@ -46,10 +46,10 @@ import type { User } from "@/types";
         }
 
         // Check if user exists
-        await this.authUtilService.validateUserDoesNotExist(email, username);
+        await this.dbUtilService.validateUserDoesNotExist(email, username);
 
         // Upload profile image
-        const { key: imageKey, url: imageUrl } = await this.authUtilService.uploadProfileImage(imageFile);
+        const { key: imageKey, url: imageUrl } = await this.s3Service.s3().uploadFileAndGetUrl(imageFile, 'users', 'avatars');
 
         try {
             // Create user in database

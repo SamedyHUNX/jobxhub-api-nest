@@ -261,7 +261,7 @@ export class OrganizationsService {
 
   // Get organizations by user ID
   findByUser = async (userId: string) => {
-    const user = await this.dbUtilsService.findUserByUserId(userId);
+    const user = await this.dbUtilsService.findUserByUserIdOrEmail(userId, undefined);
 
     if (!user) {
       this.logger.error(`User with id ${userId} not found`);

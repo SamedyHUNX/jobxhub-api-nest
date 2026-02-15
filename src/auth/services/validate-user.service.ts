@@ -1,14 +1,12 @@
 import { UserCacheService } from "@/cache/services/user-cache.service";
-import { UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
-import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
-import { and, eq, gt, inArray } from "drizzle-orm";
 import type { PayloadType } from "../jwt/types/jwt.types";
+import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 
 @Injectable()
 export class ValidateUserService {
     private logger = new Logger(ValidateUserService.name)
-    constructor(private userCacheService: UserCacheService, private dbService: DrizzleHealthService) { }
+    constructor(private userCacheService: UserCacheService, private dbUtilsService: DatabaseUtilsService) { }
 
     async validateUser(payload: PayloadType) {
         if (!payload) {
@@ -35,11 +33,7 @@ export class ValidateUserService {
         }
 
         // Cache miss - fetch from database
-        const [user] = await this.dbService.getDb()
-            .select()
-            .from(UserTable)
-            .where(eq(UserTable.id, payload.sub))
-            .limit(1);
+        const user = await this.dbUtilsService.findUserByUserIdOrEmail(payload.sub, undefined);
 
         if (!user) {
             this.logger.error(
@@ -59,18 +53,7 @@ export class ValidateUserService {
         }
 
         // Fetch subscription info
-        const [subscription] = await this.dbService.getDb()
-            .select()
-            .from(UserSubscriptionsTable)
-            .where(and(
-                eq(UserSubscriptionsTable.userId, user.id),
-                inArray(UserSubscriptionsTable.status, ['active', 'trialing']),
-                gt(UserSubscriptionsTable.currentPeriodEnd, new Date())
-            ))
-            .limit(1);
-
-
-
+        const subscription = await this.dbUtilsService.getUserSubscription(user.id);
 
         const userWithSubscription = {
             ...user,

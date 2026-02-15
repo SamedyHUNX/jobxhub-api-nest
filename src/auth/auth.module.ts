@@ -10,7 +10,6 @@ import { CacheModule } from '@/cache/cache.module';
 import { CommonModule } from '@/common/common.module';
 import { SignUpService } from './services/sign-up.service';
 import { SignInService } from './services/sign-in.service';
-import { AuthUtilsService } from './services/auth-utils.service';
 import { VerifyEmailService } from './services/verify-email.service';
 import { ForgotPasswordService } from './services/forgot-password.service';
 import { ResetPasswordService } from './services/reset-password.service';
@@ -38,6 +37,6 @@ import { ValidateUserService } from './services/validate-user.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [JwtStrategy, SignUpService, SignInService, AuthUtilsService, VerifyEmailService, ForgotPasswordService, ResetPasswordService, SignOutService, ValidateUserService],
+  providers: [JwtStrategy, SignUpService, SignInService, VerifyEmailService, ForgotPasswordService, ResetPasswordService, SignOutService, ValidateUserService],
 })
 export class AuthModule { }

@@ -4,24 +4,17 @@ import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service"
 import { Injectable, Logger } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import * as Sentry from "@sentry/nestjs"
+import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 
 @Injectable()
 export class SignOutService {
     private logger = new Logger(SignOutService.name)
-    constructor(private dbService: DrizzleHealthService, private userCacheService: UserCacheService) { }
+    constructor(private dbService: DrizzleHealthService, private userCacheService: UserCacheService, private readonly dbUtilsService: DatabaseUtilsService) { }
 
     async signOut(userId: string) {
         try {
             // 1. Get user data to clear cache properly
-            const [user] = await this.dbService.getDb()
-                .select({
-                    id: UserTable.id,
-                    email: UserTable.email,
-                    tokenVersion: UserTable.tokenVersion,
-                })
-                .from(UserTable)
-                .where(eq(UserTable.id, userId))
-                .limit(1);
+            const user = await this.dbUtilsService.findUserByUserIdOrEmail(userId, undefined);
 
             if (!user) {
                 this.logger.warn(`Sign out attempted for non-existent user: ${userId}`);

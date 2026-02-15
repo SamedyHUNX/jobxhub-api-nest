@@ -7,12 +7,19 @@ import { InngestHealthService } from "@/inngest/services/inngest-health.service"
 import { HttpException, HttpStatus, Injectable, Logger } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import * as Sentry from "@sentry/nestjs"
-import { AuthUtilsService } from "./auth-utils.service";
+import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 
 @Injectable()
 export class ForgotPasswordService {
     private logger = new Logger(ForgotPasswordService.name)
-    constructor(private rateLimitCacheService: RateLimitCacheService, private dbService: DrizzleHealthService, private tokenService: TokenService, private readonly configService: ConfigService, private inngestService: InngestHealthService, private authUtilsService: AuthUtilsService) { }
+    constructor(
+        private rateLimitCacheService: RateLimitCacheService,
+        private dbService: DrizzleHealthService,
+        private tokenService: TokenService,
+        private readonly configService: ConfigService,
+        private inngestService: InngestHealthService,
+        private dbUtilsService: DatabaseUtilsService
+    ) { }
 
     async forgotPassword(
         email: string,
@@ -52,11 +59,7 @@ export class ForgotPasswordService {
             const emailRateLimited = emailAttempts > 3;
 
             // Find user by email (always execute)
-            const [user] = await this.dbService.getDb()
-                .select()
-                .from(UserTable)
-                .where(eq(UserTable.email, email))
-                .limit(1);
+            const user = await this.dbUtilsService.findUserByUserIdOrEmail(undefined, email);
 
             userExists = !!user;
 
@@ -126,7 +129,7 @@ export class ForgotPasswordService {
             // Log different scenarios to Sentry for monitoring
             if (!userExists) {
                 this.logger.warn(
-                    `Password reset requested for non-existent email: at ${this.authUtilsService.getTimestamp()}`,
+                    `Password reset requested for non-existent email: at ${new Date().toISOString()}`,
                 );
                 Sentry.captureMessage('Password reset for non-existent email', {
                     level: 'warning',

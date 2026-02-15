@@ -1,7 +1,7 @@
 import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable, UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { and, eq, or } from "drizzle-orm";
 
 @Injectable()
 export class DatabaseUtilsService {
@@ -9,24 +9,60 @@ export class DatabaseUtilsService {
     constructor(private dbService: DrizzleHealthService) { }
 
     // UserTable
-    findUserByUserId = async (userId: string) => {
-        if (!userId) {
-            this.logger.error('Missing userId');
-            throw new BadRequestException('No userId provided');
+    findUserByUserIdOrEmail = async (userId?: string, email?: string) => {
+        if (!userId && !email) {
+            this.logger.error('Missing userId or email');
+            throw new BadRequestException('No userId or email provided');
         }
 
-        const [user] = await this.dbService.getDb()
-            .select({ id: UserTable.id })
+        if (userId) {
+            const [user] = await this.dbService.getDb()
+                .select()
+                .from(UserTable)
+                .where(eq(UserTable.id, userId))
+                .limit(1);
+
+            if (!user) {
+                this.logger.error(`User not found for userId: ${userId}`);
+                throw new NotFoundException(`User not found for userId: ${userId}`);
+            }
+
+            return user;
+        } else if (email) {
+            const [user] = await this.dbService.getDb()
+                .select()
+                .from(UserTable)
+                .where(eq(UserTable.email, email))
+                .limit(1);
+
+            if (!user) {
+                this.logger.error(`User not found for email: ${email}`);
+                throw new NotFoundException(`User not found for email: ${email}`);
+            }
+
+            return user;
+        } else {
+            this.logger.error('Missing userId or email');
+            throw new BadRequestException('No userId or email provided');
+        }
+
+    }
+
+    validateUserDoesNotExist = async (email: string, username: string) => {
+        const existingUser = await this.dbService.getDb()
+            .select()
             .from(UserTable)
-            .where(eq(UserTable.id, userId))
+            .where(or(eq(UserTable.email, email), eq(UserTable.username, username)))
             .limit(1);
 
-        if (!user) {
-            this.logger.error(`User not found for userId: ${userId}`);
-            throw new NotFoundException(`User not found for userId: ${userId}`);
+        if (existingUser.length > 0) {
+            if (existingUser[0].email === email) {
+                throw new ConflictException('Email already exists');
+            }
+            if (existingUser[0].username === username) {
+                throw new ConflictException('Username already taken');
+            }
         }
-
-        return user;
     }
 
     // OrganizationTable
