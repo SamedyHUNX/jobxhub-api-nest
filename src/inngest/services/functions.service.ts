@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InngestHealthService } from '../services/inngest-health.service';
+import { InngestHealthService } from './inngest-health.service';
 import * as Sentry from '@sentry/nestjs';
 import { EmailService } from '@/common/services/email.service';
 

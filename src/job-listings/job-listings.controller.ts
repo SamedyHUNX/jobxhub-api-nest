@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -10,13 +11,14 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { JobListingsService } from './job-listings.service';
+import { JobListingsService } from './services/job-listings.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
-import { CreateJobListingDto, UpdateJobListingDto } from './dtos/job-listings.dto';
+import { CreateJobListingDto, UpdateJobListingDto } from './dto/job-listings.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { User } from '@/types';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
+import { IdValidationPipe } from '@/utils/image-validation-pipe';
 
 @ApiTags('job-listings')
 @Controller('job-listings')
@@ -100,6 +102,7 @@ export class JobListingsController {
 
   // Update a job listing: PUT /job-listings/:jobId
   @Put('/:jobId')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   async update(
     @Body() updateJobListingDto: UpdateJobListingDto,
@@ -123,4 +126,27 @@ export class JobListingsController {
     }
   }
 
+  // Delete a job listing: DELETE /job-listings/:jobId
+  @Delete('/:jobId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async delete(
+    @CurrentUser() user: User,
+    @SelectedOrgId() orgId: string,
+    @Param('jobId') jobId: string
+  ) {
+    const success = await this.jobListingsService.delete(
+      user,
+      orgId,
+      jobId,
+    );
+
+    if (success) {
+      return {
+        message: 'Job listing deleted successfully',
+        data: [],
+        statusCode: 200,
+      };
+    }
+  }
 }

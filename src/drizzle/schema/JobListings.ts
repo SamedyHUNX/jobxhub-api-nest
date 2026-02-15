@@ -7,7 +7,7 @@ import {
   jobListingTypeEnum,
   locationRequirementEnum,
   wageIntervalEnum,
-} from '@/utils/enums';
+} from '@/types/enum';
 import { index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { JobListingApplicationTable } from './JobListingApplication';
@@ -34,7 +34,7 @@ export const JobListingTable = pgTable(
     experienceLevel: experienceLevelEnum('experience_level').notNull(),
     status: jobListingStatusEnum().notNull().default('draft'),
     type: jobListingTypeEnum().notNull(),
-    postedAt: timestamp({ withTimezone: true }),
+    postedAt: timestamp('posted_at', { withTimezone: true }),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

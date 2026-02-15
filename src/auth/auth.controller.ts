@@ -13,14 +13,13 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { AuthService } from './auth.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   RequestPasswordResetDto,
   ResetPasswordDto,
   SignInDto,
   SignUpDto,
-} from './dtos/auth.dto';
+} from './dto/auth.dto';
 import { ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { JwtAuthGuard } from './jwt/jwt.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
@@ -28,11 +27,18 @@ import { plainToInstance } from 'class-transformer';
 import { UserResponseDto } from '@/users/dtos/user-response.dto';
 import type { Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { SignUpService } from './services/sign-up.service';
+import { SignInService } from './services/sign-in.service';
+import { VerifyEmailService } from './services/verify-email.service';
+import { ForgotPasswordService } from './services/forgot-password.service';
+import { ResetPasswordService } from './services/reset-password.service';
+import { SignOutService } from './services/sign-out.service';
+import type { User } from '@/types';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private signUpService: SignUpService, private signInService: SignInService, private verifyEmailService: VerifyEmailService, private forgotPasswordService: ForgotPasswordService, private resetPasswordService: ResetPasswordService, private signOutService: SignOutService) { }
 
   // Sign Up (/api/auth/signup)
   @Post('sign-up')
@@ -50,7 +56,7 @@ export class AuthController {
     @Headers('accept-language') acceptLanguage: string,
     @Res() res: Response,
   ) {
-    const success = await this.authService.signUp(data, image, acceptLanguage);
+    const success = await this.signUpService.signUp(data, image, acceptLanguage);
     if (success) {
       return res.json({
         statusCode: 200,
@@ -73,7 +79,7 @@ export class AuthController {
   @HttpCode(201)
   @Post('verify-email')
   async verifyEmail(@Body('token') token: string, @Res() res: Response) {
-    const success = await this.authService.verifyEmail(token);
+    const success = await this.verifyEmailService.verifyEmail(token);
     if (success) {
       return res.json({
         statusCode: 200,
@@ -101,7 +107,7 @@ export class AuthController {
     @Ip() ipAddress: string,
     @CurrentUser() user: any,
   ) {
-    const token = await this.authService.signIn(data, ipAddress, user);
+    const token = await this.signInService.signIn(data, ipAddress, user);
     if (!token) {
       return res.json({
         statusCode: 400,
@@ -132,7 +138,7 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
-  getMe(@CurrentUser() user: any) {
+  getMe(@CurrentUser() user: User) {
     const userData = plainToInstance(UserResponseDto, user, {
       excludeExtraneousValues: true,
     });
@@ -164,7 +170,7 @@ export class AuthController {
     @Ip() ipAddress: string,
     @Res() res: Response,
   ) {
-    const success = this.authService.forgotPassword(email, acceptLanguage, ipAddress);
+    const success = this.forgotPasswordService.forgotPassword(email, acceptLanguage, ipAddress);
     if (!success) {
       return res.json({
         statusCode: 400,
@@ -187,7 +193,7 @@ export class AuthController {
     @Body() { token, newPassword, confirmNewPassword }: ResetPasswordDto,
     @Res() res: Response,
   ) {
-    const success = this.authService.resetPassword(
+    const success = this.resetPasswordService.resetPassword(
       token,
       newPassword,
       confirmNewPassword,
@@ -211,7 +217,7 @@ export class AuthController {
   @Post('sign-out')
   @UseGuards(JwtAuthGuard)
   async signOut(@Res() res: Response, @CurrentUser() user: any) {
-    await this.authService.signOut(user.id);
+    await this.signOutService.signOut(user.id);
 
     // Clear the cookie
     res.clearCookie('access_token', {

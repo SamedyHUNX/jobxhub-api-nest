@@ -10,7 +10,7 @@ import * as Sentry from '@sentry/node';
 export class DrizzleHealthService {
   private readonly logger = new Logger(DrizzleHealthService.name);
 
-  constructor(private drizzleService: DrizzleService) {}
+  constructor(private drizzleService: DrizzleService) { }
 
   getDb() {
     if (!this.drizzleService) {

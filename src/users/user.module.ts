@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@/common/services/config.service';
 import { CommonModule } from '@/common/common.module';
 import { CacheModule } from '@/cache/cache.module';
+import { PermissionsModule } from '@/permissions/permissions.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { CacheModule } from '@/cache/cache.module';
     InngestModule,
     CommonModule,
     CacheModule,
+    PermissionsModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {

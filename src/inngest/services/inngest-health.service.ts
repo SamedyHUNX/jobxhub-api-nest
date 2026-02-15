@@ -4,7 +4,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/node';
-import { InngestClientService } from './inngest.service';
+import { InngestClientService } from './inngest-client.service';
 
 @Injectable()
 export class InngestHealthService {

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import {
   S3Client,
@@ -18,6 +19,7 @@ import { getImageKey } from '@/utils/helpers';
 
 @Injectable()
 export class S3Service {
+  private logger = new Logger(S3Service.name);
   private s3Client: S3Client;
   private bucketName: string;
 
@@ -192,5 +194,13 @@ export class S3Service {
     } while (continuationToken);
 
     return keys;
+  }
+
+  async cleanupUploadedImage(imageKey: string) {
+    this.logger.log(`Cleaning up uploaded image: ${imageKey}`);
+    await this.deleteFile(imageKey)
+      .catch((e) =>
+        this.logger.error(`Failed to delete ${imageKey}: ${e.message}`),
+      );
   }
 }

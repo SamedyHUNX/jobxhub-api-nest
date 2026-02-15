@@ -3,7 +3,39 @@ import { ConfigService as NestConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ConfigService {
-  constructor(private configService: NestConfigService) {}
+  constructor(private configService: NestConfigService) { }
+
+  // Stripe
+  get stripeSecretKey(): string {
+    return this.configService.getOrThrow('STRIPE_SECRET_KEY')
+  }
+  get stripeWebhookSecret(): string {
+    return this.configService.getOrThrow('STRIPE_WEBHOOK_SECRET')
+  }
+
+  get stripeBasicMonthlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_BASIC_MONTHLY_PRICE_ID')
+  }
+
+  get stripeBasicYearlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_BASIC_YEARLY_PRICE_ID')
+  }
+
+  get stripeGrowthMonthlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_GROWTH_MONTHLY_PRICE_ID')
+  }
+
+  get stripeGrowthYearlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_GROWTH_YEARLY_PRICE_ID')
+  }
+
+  get stripeEnterpriseMonthlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_ENTERPRISE_MONTHLY_PRICE_ID')
+  }
+
+  get stripeEnterpriseYearlyPriceId(): string {
+    return this.configService.getOrThrow('STRIPE_ENTERPRISE_YEARLY_PRICE_ID')
+  }
 
   // Database
   get dbUrl(): string {

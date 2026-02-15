@@ -7,7 +7,6 @@ import { UserCacheService } from './services/user-cache.service';
 import { RateLimitCacheService } from './services/rate-limit-cache.service';
 import { CacheHealthService } from './services/cache-health.service';
 import { CommonModule } from '@/common/common.module';
-import { TokenService } from '../common/services/token.service';
 
 @Module({
   imports: [
@@ -30,7 +29,7 @@ import { TokenService } from '../common/services/token.service';
       },
     }),
   ],
-  providers: [UserCacheService, RateLimitCacheService, CacheHealthService, TokenService],
-  exports: [UserCacheService, RateLimitCacheService, CacheHealthService, TokenService],
+  providers: [UserCacheService, RateLimitCacheService, CacheHealthService],
+  exports: [UserCacheService, RateLimitCacheService, CacheHealthService],
 })
 export class CacheModule { }

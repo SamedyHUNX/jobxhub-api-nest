@@ -1,6 +1,6 @@
-import { Permissions } from './permissions';
+import { Permissions } from './app-permissions';
 
-export const AppRolePermissions: Record<string, string[]> = {
+export const AppRolePermissionSets: Record<string, string[]> = {
     SUPER_ADMIN: [
         Permissions.READ_ALL_USERS,
         Permissions.CREATE_USER,
@@ -13,10 +13,11 @@ export const AppRolePermissions: Record<string, string[]> = {
     ],
 };
 
-export const OrgRolePermissions: Record<string, string[]> = {
+export const PermissionSets: Record<string, string[]> = {
     OWNER: [
         Permissions.UPDATE_ORG,
         Permissions.DELETE_ORG,
+        Permissions.CREATE_ORG,
         Permissions.CREATE_JOB_LISTING,
         Permissions.UPDATE_JOB_LISTING,
         Permissions.DELETE_JOB_LISTING,
@@ -28,6 +29,7 @@ export const OrgRolePermissions: Record<string, string[]> = {
         Permissions.APPROVE_APPLICANT,
         Permissions.READ_JOB_LISTING,
         Permissions.READ_APPLICANT,
+        Permissions.UPDATE_MY_PROFILE
         // Add org‑level management permissions
     ],
 
@@ -35,6 +37,7 @@ export const OrgRolePermissions: Record<string, string[]> = {
         // Usually read‑only or limited org permissions
         Permissions.READ_JOB_LISTING,
         Permissions.READ_APPLICANT,
+        Permissions.UPDATE_MY_PROFILE
     ],
 
     APPLICANT_MANAGER: [
@@ -46,7 +49,6 @@ export const OrgRolePermissions: Record<string, string[]> = {
         Permissions.CHANGE_APPLICANT_RATING,
         Permissions.CHANGE_APPLICANT_STAGE,
     ],
-
     JOB_LISTING_MANAGER: [
         Permissions.CREATE_JOB_LISTING,
         Permissions.UPDATE_JOB_LISTING,
@@ -55,7 +57,6 @@ export const OrgRolePermissions: Record<string, string[]> = {
         Permissions.CHANGE_JOB_LISTING_STATUS,
         Permissions.READ_BILLING,
     ],
-
     ORG_ADMIN: [
         Permissions.CREATE_ORG,
         Permissions.UPDATE_ORG,

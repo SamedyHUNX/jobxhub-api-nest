@@ -34,4 +34,17 @@ export class UserResponseDto {
 
   @Expose()
   updatedAt: Date;
+
+  @Expose()
+  hasSubscription: boolean;
+
+  @Expose()
+  subscription?: {
+    planName: string;
+    status: string;
+    interval: string;
+    currentPeriodEnd: Date;
+    cancelAtPeriodEnd: boolean;
+  };
 }
+

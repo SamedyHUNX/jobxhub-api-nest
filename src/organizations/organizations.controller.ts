@@ -4,26 +4,26 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  NotFoundException,
   Param,
   Post,
+  Put,
   Query,
-  Res,
   UploadedFile,
   UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { OrganizationsService } from './organizations.service';
+import { OrganizationsService } from './services/organizations.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MulterExceptionFilter } from '@/utils/multer-global-handling';
-import { CreateOrganizationDto } from './dtos/organizations.dto';
+import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { IdValidationPipe } from '@/utils/image-validation-pipe';
+import { IdValidationPipe, ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
 import type { User } from '@/types';
+import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 
 @Controller('organizations')
 export class OrganizationsController {
@@ -51,8 +51,9 @@ export class OrganizationsController {
     @Body() createOrganizationDto: CreateOrganizationDto,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: User,
+    @SelectedOrgId() orgId: string,
   ) {
-    await this.orgsService.create(createOrganizationDto, file, user.id);
+    await this.orgsService.create(createOrganizationDto, file, user, orgId);
 
     return {
       statusCode: 200,
@@ -73,7 +74,7 @@ export class OrganizationsController {
       isVerified === 'true' ? true : isVerified === 'false' ? false : undefined;
 
     const allOrganizations = await this.orgsService.findAll(
-      user.id,
+      user,
       search,
       isVerifiedBool
     );
@@ -97,10 +98,16 @@ export class OrganizationsController {
     };
   }
 
-  // Get selected organization by ID: GET /organizations/selected
-  @Get('org/selected')
-  async findSelected(@SelectedOrgId() orgId: string) {
-    const org = await this.orgsService.findSelected(orgId);
+  @Put('org/:orgId')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('image'))
+  async update(
+    @CurrentUser() user: User,
+    @Body() updatedOrgDto: UpdateOrganizationDto,
+    @Param('orgId', IdValidationPipe) orgId: string,
+    @UploadedFile(new ImageValidationPipe()) imageFile?: Express.Multer.File,
+  ) {
+    const org = await this.orgsService.update(user, updatedOrgDto, orgId, imageFile);
 
     return {
       data: {
@@ -109,15 +116,4 @@ export class OrganizationsController {
     };
   }
 
-  // Get a single organization by ID: GET /organizations/:id
-  @Get('org/:id')
-  async findOne(@Param('id', IdValidationPipe) id: string) {
-    const org = await this.orgsService.findOne(id);
-
-    return {
-      data: {
-        orgs: org,
-      },
-    };
-  }
 }
