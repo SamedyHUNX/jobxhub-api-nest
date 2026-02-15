@@ -13,7 +13,7 @@ export const AppRolePermissions: Record<string, string[]> = {
     ],
 };
 
-export const OrgRolePermissions: Record<string, string[]> = {
+export const PermissionSets: Record<string, string[]> = {
     OWNER: [
         Permissions.UPDATE_ORG,
         Permissions.DELETE_ORG,
@@ -48,7 +48,6 @@ export const OrgRolePermissions: Record<string, string[]> = {
         Permissions.CHANGE_APPLICANT_RATING,
         Permissions.CHANGE_APPLICANT_STAGE,
     ],
-
     JOB_LISTING_MANAGER: [
         Permissions.CREATE_JOB_LISTING,
         Permissions.UPDATE_JOB_LISTING,
@@ -57,7 +56,6 @@ export const OrgRolePermissions: Record<string, string[]> = {
         Permissions.CHANGE_JOB_LISTING_STATUS,
         Permissions.READ_BILLING,
     ],
-
     ORG_ADMIN: [
         Permissions.CREATE_ORG,
         Permissions.UPDATE_ORG,

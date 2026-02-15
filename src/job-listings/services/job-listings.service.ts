@@ -1,8 +1,8 @@
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { CreateJobListingDto, UpdateJobListingDto } from '../dto/job-listings.dto';
-import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable } from '@/drizzle/schema';
-import { and, eq, like, or } from 'drizzle-orm';
+import { JobListingApplicationTable, JobListingTable, OrganizationTable } from '@/drizzle/schema';
+import { and, desc, eq, like, or, count, SQL } from 'drizzle-orm';
 import type { User } from '@/types';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import { ConfigService } from '@/common/services/config.service';
@@ -60,15 +60,8 @@ export class JobListingsService {
 
   // Get all job listings with optional filtering
   findAll = async (search?: string, organizationId?: string, status?: string, type?: string, locationRequirement?: string, experienceLevel?: string, userId?: string) => {
-    const baseQuery = this.db
-      .select()
-      .from(JobListingTable)
-      .leftJoin(
-        OrganizationTable,
-        eq(JobListingTable.organizationId, OrganizationTable.id),
-      );
-
-    const conditions: any[] = [];
+    // Build conditions array
+    const conditions: SQL[] = [];
 
     if (search) {
       const searchCondition = or(
@@ -97,18 +90,47 @@ export class JobListingsService {
       );
     }
 
-    const jobListings =
-      conditions.length > 0
-        ? await baseQuery.where(and(...conditions))
-        : await baseQuery;
+    // Build the query with all fields and joins
+    let query = this.db.select({
+      id: JobListingTable.id,
+      title: JobListingTable.title,
+      description: JobListingTable.description,
+      wage: JobListingTable.wage,
+      wageInterval: JobListingTable.wageInterval,
+      stateAbbreviation: JobListingTable.stateAbbreviation,
+      city: JobListingTable.city,
+      isFeatured: JobListingTable.isFeatured,
+      locationRequirement: JobListingTable.locationRequirement,
+      experienceLevel: JobListingTable.experienceLevel,
+      type: JobListingTable.type,
+      status: JobListingTable.status,
+      postedAt: JobListingTable.postedAt,
+      createdAt: JobListingTable.createdAt,
+      updatedAt: JobListingTable.updatedAt,
+      organizationId: JobListingTable.organizationId,
+      applicationCount: count(JobListingApplicationTable.userId),
+      organization: OrganizationTable
+    })
+      .from(JobListingTable)
+      .leftJoin(
+        OrganizationTable,
+        eq(JobListingTable.organizationId, OrganizationTable.id),
+      )
+      .leftJoin(
+        JobListingApplicationTable,
+        eq(JobListingTable.id, JobListingApplicationTable.jobListingId)
+      )
+      .groupBy(JobListingTable.id, OrganizationTable.id)
+      .orderBy(desc(JobListingTable.createdAt));
 
-    // Flatten results
-    const flattened = jobListings.map((row) => ({
-      ...row.job_listings,
-      organization: row.organizations
-    }))
+    // Apply where conditions if any exist
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
 
-    return flattened
+    const data = await query;
+
+    return data;
   }
 
   // Find job listings based on id
@@ -176,6 +198,38 @@ export class JobListingsService {
         .where(eq(JobListingTable.id, jobId));
     } catch (error) {
       throw new InternalServerErrorException('Failed to update job listing');
+    }
+
+    return true
+  }
+
+  // Delete a job listing based on id
+  delete = async (user: User, orgId: string, jobId: string) => {
+    const canDelete = this.appPermission.hasPermission(user, orgId, 'DELETE_JOB_LISTING');
+
+    if (!canDelete) {
+      throw new ForbiddenException('You are not authorized to delete this job listing');
+    }
+
+    const jobListing = await this.jobListingsUtilsService.getJobListing(jobId);
+
+    if (!jobListing) {
+      throw new NotFoundException('Job listing not found');
+    }
+
+    if (jobListing.organizationId !== orgId) {
+      Sentry.captureException(
+        new Error(`Unauthorized delete attempt: jobId=${jobId}, orgId=${orgId}, userId=${user.id}`)
+      );
+      throw new ForbiddenException('You cannot delete this job listing');
+    }
+
+    try {
+      await this.db
+        .delete(JobListingTable)
+        .where(eq(JobListingTable.id, jobId));
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to delete job listing');
     }
 
     return true

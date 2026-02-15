@@ -94,7 +94,7 @@ export class SubscriptionPermissionsService {
 
         // Then check role permissions
         const plans = getSubscriptionPlans();
-        return plans[subscription.planName].allowedRoles.includes(role as any);
+        return plans[subscription.planName].grantedPermissionSets.includes(role as any);
     }
 
     /**
@@ -146,6 +146,6 @@ export class SubscriptionPermissionsService {
         }
 
         const plans = getSubscriptionPlans();
-        return plans[subscription.planName].allowedRoles;
+        return plans[subscription.planName].grantedPermissionSets;
     }
 }

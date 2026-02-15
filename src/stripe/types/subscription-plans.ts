@@ -29,7 +29,7 @@ export const getSubscriptionPlans = () => ({
             featuredListings: 0,
             organizations: 1
         },
-        allowedRoles: ['APPLICANT_MANAGER'],
+        grantedPermissionSets: ['APPLICANT_MANAGER', 'JOB_LISTING_MANAGER'],
         features: [
             '5 job postings',
             'Applicant management',
@@ -48,7 +48,7 @@ export const getSubscriptionPlans = () => ({
             featuredListings: 3,
             organizations: 5
         },
-        allowedRoles: ['APPLICANT_MANAGER', 'JOB_LISTING_MANAGER'],
+        grantedPermissionSets: ['APPLICANT_MANAGER', 'JOB_LISTING_MANAGER'],
         features: [
             '10 job postings',
             '3 featured listings',
@@ -68,7 +68,7 @@ export const getSubscriptionPlans = () => ({
             featuredListings: Infinity,
             organizations: 10
         },
-        allowedRoles: ['OWNER', 'ORG_ADMIN', 'APPLICANT_MANAGER', 'JOB_LISTING_MANAGER'],
+        grantedPermissionSets: ['OWNER', 'ORG_ADMIN', 'APPLICANT_MANAGER', 'JOB_LISTING_MANAGER'],
         features: [
             '15 job postings',
             'Unlimited featured listings',

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -17,6 +18,7 @@ import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { User } from '@/types';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
+import { IdValidationPipe } from '@/utils/image-validation-pipe';
 
 @ApiTags('job-listings')
 @Controller('job-listings')
@@ -118,6 +120,30 @@ export class JobListingsController {
     if (success) {
       return {
         message: 'Job listing updated successfully',
+        data: [],
+        statusCode: 200,
+      };
+    }
+  }
+
+  // Delete a job listing: DELETE /job-listings/:jobId
+  @Delete('/:jobId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async delete(
+    @CurrentUser() user: User,
+    @SelectedOrgId() orgId: string,
+    @Param('jobId') jobId: string
+  ) {
+    const success = await this.jobListingsService.delete(
+      user,
+      orgId,
+      jobId,
+    );
+
+    if (success) {
+      return {
+        message: 'Job listing deleted successfully',
         data: [],
         statusCode: 200,
       };
