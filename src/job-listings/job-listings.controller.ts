@@ -62,17 +62,17 @@ export class JobListingsController {
     }
   }
 
-  // Get a job listing based on Id: GET /job-listings/:id
-  @Get(':id')
+  // Get a job listing based on Id: GET /job-listings/:jobId
+  @Get(':jobId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   async findOne(
     @CurrentUser() user: User,
-    @Param('id') id: string,
+    @Param('jobId') jobId: string,
     @SelectedOrgId() orgId: string,
   ) {
     const jobListings = await this.jobListingsService.findOne(
-      id,
+      jobId,
       user.id,
       orgId
     );

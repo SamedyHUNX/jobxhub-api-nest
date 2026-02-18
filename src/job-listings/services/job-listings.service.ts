@@ -168,15 +168,49 @@ export class JobListingsService {
   }
 
   // Find job listings based on id
-  findOne = async (id: string, userId: string, orgId: string) => {
-    const jobListing = await this.dbUtilsService.getJobListingById(id);
+  findOne = async (jobId: string, userId: string, orgId: string) => {
+    const query = this.dbService.getDb().select({
+      id: JobListingTable.id,
+      title: JobListingTable.title,
+      description: JobListingTable.description,
+      wage: JobListingTable.wage,
+      wageInterval: JobListingTable.wageInterval,
+      stateAbbreviation: JobListingTable.stateAbbreviation,
+      city: JobListingTable.city,
+      isFeatured: JobListingTable.isFeatured,
+      locationRequirement: JobListingTable.locationRequirement,
+      experienceLevel: JobListingTable.experienceLevel,
+      type: JobListingTable.type,
+      status: JobListingTable.status,
+      postedAt: JobListingTable.postedAt,
+      createdAt: JobListingTable.createdAt,
+      updatedAt: JobListingTable.updatedAt,
+      organizationId: JobListingTable.organizationId,
+      applicationCount: count(JobListingApplicationTable.userId),
+      organization: OrganizationTable
+    })
+      .from(JobListingTable)
+      .leftJoin(
+        OrganizationTable,
+        eq(JobListingTable.organizationId, OrganizationTable.id),
+      )
+      .leftJoin(
+        JobListingApplicationTable,
+        eq(JobListingTable.id, JobListingApplicationTable.jobListingId)
+      )
+      .where(eq(JobListingTable.id, jobId))
+      .groupBy(JobListingTable.id, OrganizationTable.id)
+      .limit(1);
+
+    const [jobListing] = await query;
 
     if (!jobListing) {
-      throw new NotFoundException('Job listing not found');
+      throw new NotFoundException("Job listing not found");
     }
 
-    return jobListing
-  }
+    return jobListing;
+  };
+
 
   // Update a job listing based on id
   update = async (user: User, orgId: string, jobId: string, dto: UpdateJobListingDto) => {
@@ -289,6 +323,8 @@ export class JobListingsService {
     const resume = await this.dbService.getDb()
       .select()
       .from(UserResumeTable).where(eq(UserResumeTable.userId, userId))
+
+    console.log(resume)
 
     return resume
   }

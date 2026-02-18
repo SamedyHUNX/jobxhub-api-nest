@@ -211,39 +211,6 @@ export class UserCacheService {
   }
 
   /**
-   * Update user email in cache (handles email change scenario)
-   * IMPORTANT: Use this when user changes their email
-   */
-  async updateUserEmail(userId: string, oldEmail: string, newEmail: string): Promise<void> {
-    try {
-      // Get the current user data
-      const user = await this.getUserById(userId);
-
-      if (!user) {
-        this.logger.warn(`Cannot update email for non-existent user: ${userId}`);
-        return;
-      }
-
-      // Delete old email mapping
-      await this.cacheService.getValidatedCache().del(`user:email-to-id:${oldEmail}`);
-
-      // Update user object with new email
-      const updatedUser: CachedUser = {
-        ...user,
-        email: newEmail,
-      };
-
-      // Cache with new email mapping
-      await this.cacheUser(updatedUser);
-
-      this.logger.log(`User email updated in cache: ${userId} (${oldEmail} -> ${newEmail})`);
-    } catch (error) {
-      this.logger.error(`Failed to update user email in cache: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
    * Get session data by user ID and optional session ID
    */
   async getSession(userId: string, sessionId?: string): Promise<any> {
