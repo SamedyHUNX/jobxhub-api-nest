@@ -1,4 +1,4 @@
-import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable, UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
+import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable, UserResumeTable, UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { and, eq, or } from "drizzle-orm";
@@ -37,7 +37,7 @@ export class DatabaseUtilsService {
 
             if (!user) {
                 this.logger.error(`User not found for email: ${email}`);
-                throw new NotFoundException(`User not found for email: ${email}`);
+                throw new NotFoundException("Invalid credentials");
             }
 
             return user;
@@ -157,5 +157,15 @@ export class DatabaseUtilsService {
                 )
             );
         return userSubscription;
+    }
+
+    // ResumeTable
+    getResumeByUserId = async (userId: string) => {
+        const [resume] = await this.dbService.getDb()
+            .select()
+            .from(UserResumeTable)
+            .where(eq(UserResumeTable.userId, userId))
+
+        return resume;
     }
 }

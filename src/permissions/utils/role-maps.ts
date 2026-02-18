@@ -10,6 +10,7 @@ export const AppRolePermissionSets: Record<string, string[]> = {
     ],
     USER: [
         // Typically minimal or none at app level
+        Permissions.VIEW_OWN_JOB_LISTING_APPLICATION
     ],
 };
 

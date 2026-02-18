@@ -30,5 +30,8 @@ export const Permissions = {
 
     // Billing
     READ_BILLING: 'READ_BILLING',
+
+    // Job Listing Applications
+    VIEW_OWN_JOB_LISTING_APPLICATION: 'VIEW_OWN_JOB_LISTING_APPLICATION',
 } as const;
 

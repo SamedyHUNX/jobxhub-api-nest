@@ -1,8 +1,8 @@
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
-import { CreateJobListingDto, UpdateJobListingDto } from '../dto/job-listings.dto';
-import { JobListingApplicationTable, JobListingTable, OrganizationTable } from '@/drizzle/schema';
-import { and, desc, eq, like, or, count, SQL } from 'drizzle-orm';
+import { CreateJobListingApplicationDto, CreateJobListingDto, UpdateJobListingDto } from '../dto/job-listings.dto';
+import { JobListingApplicationTable, JobListingTable, OrganizationTable, UserResumeTable } from '@/drizzle/schema';
+import { and, desc, eq, like, or, count, SQL, inArray } from 'drizzle-orm';
 import type { User } from '@/types';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import { ConfigService } from '@/common/services/config.service';
@@ -13,7 +13,13 @@ import { DatabaseUtilsService } from '@/common/services/database-utils.service';
 export class JobListingsService {
   private readonly logger = new Logger(JobListingsService.name);
 
-  constructor(private dbService: DrizzleHealthService, private appPermission: AppPermissionService, private readonly config: ConfigService, private dbUtilsService: DatabaseUtilsService, private appPermissionService: AppPermissionService) { }
+  constructor(
+    private dbService: DrizzleHealthService,
+    private appPermission: AppPermissionService,
+    private readonly config: ConfigService,
+    private dbUtilsService: DatabaseUtilsService,
+    private appPermissionService: AppPermissionService
+  ) { }
 
   create = async (data: CreateJobListingDto, user: User, orgId: string) => {
     if (!this.appPermissionService.hasPermission(user, orgId, 'CREATE_JOB_LISTING')) {
@@ -59,7 +65,16 @@ export class JobListingsService {
 
 
   // Get all job listings with optional filtering
-  findAll = async (search?: string, organizationId?: string, status?: string, type?: string, locationRequirement?: string, experienceLevel?: string, userId?: string) => {
+  findAll = async (
+    search?: string,
+    title?: string,
+    organizationId?: string,
+    status?: string, type?: string,
+    locationRequirement?: string,
+    experience?: string,
+    city?: string,
+    state?: string,
+    jobIds?: string | string[]) => {
     // Build conditions array
     const conditions: SQL[] = [];
 
@@ -70,6 +85,12 @@ export class JobListingsService {
       );
       if (searchCondition) conditions.push(searchCondition);
     }
+
+    if (title) {
+      const titleCondition = like(JobListingTable.title, `%${title}%`);
+      if (titleCondition) conditions.push(titleCondition);
+    }
+
     if (organizationId) {
       conditions.push(eq(JobListingTable.organizationId, organizationId));
     }
@@ -84,10 +105,23 @@ export class JobListingsService {
         eq(JobListingTable.locationRequirement, locationRequirement as any),
       );
     }
-    if (experienceLevel) {
+    if (experience) {
       conditions.push(
-        eq(JobListingTable.experienceLevel, experienceLevel as any),
+        eq(JobListingTable.experienceLevel, experience as any),
       );
+    }
+
+    if (city) {
+      conditions.push(eq(JobListingTable.city, city));
+    }
+
+    if (state) {
+      conditions.push(eq(JobListingTable.stateAbbreviation, state));
+    }
+
+    if (jobIds && jobIds.length > 0) {
+      const jobIdsArray = Array.isArray(jobIds) ? jobIds : [jobIds];
+      conditions.push(inArray(JobListingTable.id, jobIdsArray));
     }
 
     // Build the query with all fields and joins
@@ -233,5 +267,56 @@ export class JobListingsService {
     }
 
     return true
+  }
+
+  // Get job listing applications
+  getOwnJobListingApplication = async (userId: string, jobId: string) => {
+    const jobListing = await this.dbUtilsService.getJobListingById(jobId);
+
+    if (!jobListing) {
+      throw new NotFoundException('Job listing not found');
+    }
+
+    const applications = await this.dbService.getDb()
+      .select()
+      .from(JobListingApplicationTable).where(and(eq(JobListingApplicationTable.jobListingId, jobId), eq(JobListingApplicationTable.userId, userId)))
+
+    return applications
+  }
+
+  // Get user resume
+  getUserResume = async (userId: string) => {
+    const resume = await this.dbService.getDb()
+      .select()
+      .from(UserResumeTable).where(eq(UserResumeTable.userId, userId))
+
+    return resume
+  }
+
+  // Create job listing application
+  createJobListingApplication = async (userId: string, jobId: string, dto: CreateJobListingApplicationDto) => {
+    const [jobListing, userResume] = await Promise.all([
+      this.dbUtilsService.getJobListingById(jobId),
+      this.dbUtilsService.getResumeByUserId(userId)
+    ])
+
+    if (!jobListing) {
+      throw new NotFoundException('Job listing not found');
+    }
+
+    if (!userResume) {
+      throw new NotFoundException('User resume not found. Please upload your resume before applying');
+    }
+
+    const application = await this.dbService.getDb()
+      .insert(JobListingApplicationTable)
+      .values({
+        jobListingId: jobId,
+        userId: userId,
+        coverLetter: dto.coverLetter,
+      })
+      .returning();
+
+    return application
   }
 }
