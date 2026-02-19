@@ -59,4 +59,10 @@ export type Events = {
   'jobxhub/organization.created': {
     data: OrganizationJSON;
   };
+  'jobxhub/job_listing_application.created': {
+    data: {
+      jobListingId: string;
+      userId: string
+    }
+  }
 };

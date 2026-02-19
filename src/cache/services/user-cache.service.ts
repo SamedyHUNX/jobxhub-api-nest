@@ -14,13 +14,18 @@ export class UserCacheService {
    */
   async getUserByEmail(email: string): Promise<CachedUser | null> {
     try {
-      const user = await this.cacheService
+      // Get the user ID from the email mapping
+      const userId = await this.cacheService
         .getValidatedCache()
-        .get<CachedUser>(`user:email:${email}`);
-      return user ?? null;
+        .get<string>(`user:email-to-id:${email}`);
+
+      if (!userId) return null;
+
+      // Fetch the actual user data by ID
+      return this.getUserById(userId);
     } catch (error) {
       this.logger.error(`Failed to get user by email: ${error.message}`);
-      return null; // Graceful degradation
+      return null;
     }
   }
 
@@ -40,15 +45,17 @@ export class UserCacheService {
   }
 
   /**
-   * Cache user with both email and ID keys
+   * Cache user with ID as source of truth and email mapping
    */
   async cacheUser(user: CachedUser, ttl?: number): Promise<void> {
     try {
       const cacheTTL = ttl ?? this.TTL;
       await Promise.all([
+        // Small mapping entry: email -> userId
         this.cacheService
           .getValidatedCache()
-          .set(`user:email:${user.email}`, user, cacheTTL),
+          .set(`user:email-to-id:${user.email}`, user.id, cacheTTL),
+        // Full user object (single source of truth)
         this.cacheService
           .getValidatedCache()
           .set(`user:id:${user.id}`, user, cacheTTL),
@@ -56,7 +63,7 @@ export class UserCacheService {
       this.logger.log(`User cached: ${user.email} (ID: ${user.id})`);
     } catch (error) {
       this.logger.error(`Failed to cache user: ${error.message}`);
-      throw error; // Re-throw for caller to handle
+      throw error;
     }
   }
 
@@ -65,12 +72,12 @@ export class UserCacheService {
    */
   async clearUserById(userId: string): Promise<void> {
     try {
-      // First, get the user to obtain the email for deletion
+      // First, get the user to obtain the email for mapping deletion
       const user = await this.getUserById(userId);
 
       if (user) {
         await Promise.all([
-          this.cacheService.getValidatedCache().del(`user:email:${user.email}`),
+          this.cacheService.getValidatedCache().del(`user:email-to-id:${user.email}`),
           this.cacheService.getValidatedCache().del(`user:id:${userId}`),
         ]);
         this.logger.log(`Cache cleared for user: ${user.email} (ID: ${userId})`);
@@ -89,17 +96,20 @@ export class UserCacheService {
    */
   async clearUserByEmail(email: string): Promise<void> {
     try {
-      const user = await this.getUserByEmail(email);
+      // Get userId from the mapping
+      const userId = await this.cacheService
+        .getValidatedCache()
+        .get<string>(`user:email-to-id:${email}`);
 
-      if (user) {
+      if (userId) {
         await Promise.all([
-          this.cacheService.getValidatedCache().del(`user:email:${email}`),
-          this.cacheService.getValidatedCache().del(`user:id:${user.id}`),
+          this.cacheService.getValidatedCache().del(`user:email-to-id:${email}`),
+          this.cacheService.getValidatedCache().del(`user:id:${userId}`),
         ]);
-        this.logger.log(`Cache cleared for user: ${email} (ID: ${user.id})`);
+        this.logger.log(`Cache cleared for user: ${email} (ID: ${userId})`);
       } else {
-        // If user not in cache, just try to delete by email
-        await this.cacheService.getValidatedCache().del(`user:email:${email}`);
+        // If mapping not in cache, just try to delete the email mapping
+        await this.cacheService.getValidatedCache().del(`user:email-to-id:${email}`);
         this.logger.log(`Cache cleared for email: ${email}`);
       }
     } catch (error) {
@@ -138,8 +148,46 @@ export class UserCacheService {
   }
 
   /**
+   * Invalidate user and all associated sessions (nuclear option)
+   * Use this for: password changes, account compromises, permission revocations
+   */
+  async invalidateUser(userId: string): Promise<void> {
+    try {
+      await Promise.all([
+        this.clearUserById(userId),
+        this.invalidateAllSessions(userId),
+      ]);
+      this.logger.log(`User and sessions invalidated for user ID: ${userId}`);
+    } catch (error) {
+      this.logger.error(`Failed to invalidate user: ${error.message}`);
+    }
+  }
+
+  /**
+   * Invalidate user by email and all associated sessions
+   */
+  async invalidateUserByEmail(email: string): Promise<void> {
+    try {
+      // Get userId from mapping first
+      const userId = await this.cacheService
+        .getValidatedCache()
+        .get<string>(`user:email-to-id:${email}`);
+
+      if (userId) {
+        await this.invalidateUser(userId);
+      } else {
+        // Just clear the email mapping if no userId found
+        await this.cacheService.getValidatedCache().del(`user:email-to-id:${email}`);
+        this.logger.log(`Email mapping cleared: ${email}`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to invalidate user by email: ${error.message}`);
+    }
+  }
+
+  /**
    * Refresh user data in cache from database
-   * Note: This requires a userService or repository to fetch fresh data
+   * Use this for: profile updates where you want to update cache without killing sessions
    */
   async refreshUserCache(
     userId: string,
@@ -159,21 +207,6 @@ export class UserCacheService {
     } catch (error) {
       this.logger.error(`Failed to refresh user cache: ${error.message}`);
       throw error;
-    }
-  }
-
-  /**
-   * Invalidate user and all associated sessions
-   */
-  async invalidateUser(userId: string): Promise<void> {
-    try {
-      await Promise.all([
-        this.clearUserById(userId),
-        this.invalidateAllSessions(userId),
-      ]);
-      this.logger.log(`User and sessions invalidated for user ID: ${userId}`);
-    } catch (error) {
-      this.logger.error(`Failed to invalidate user: ${error.message}`);
     }
   }
 
@@ -245,6 +278,7 @@ export class UserCacheService {
 
   /**
    * Update specific user fields in cache
+   * NOTE: If updating email, use updateUserEmail() instead
    */
   async updateUserInCache(
     userId: string,
@@ -256,6 +290,11 @@ export class UserCacheService {
       if (!existingUser) {
         this.logger.warn(`Cannot update non-existent user in cache: ${userId}`);
         return;
+      }
+
+      // Prevent email updates through this method
+      if (updates.email && updates.email !== existingUser.email) {
+        throw new Error('Use updateUserEmail() to change user email');
       }
 
       const updatedUser: CachedUser = {

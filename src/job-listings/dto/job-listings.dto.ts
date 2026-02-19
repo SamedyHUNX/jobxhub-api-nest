@@ -80,4 +80,10 @@ export class UpdateJobListingDto extends PartialType(CreateJobListingDto) {
   updatedAt?: never;
 }
 
+export class CreateJobListingApplicationDto {
+  @IsString()
+  @IsNotEmpty()
+  coverLetter: string;
+}
+
 

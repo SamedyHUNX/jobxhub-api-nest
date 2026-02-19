@@ -2,68 +2,52 @@ import { UserCacheService } from "@/cache/services/user-cache.service";
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import type { PayloadType } from "../jwt/types/jwt.types";
 import { DatabaseUtilsService } from "@/common/services/database-utils.service";
+import { SubscriptionPermissionsService } from "@/permissions/services/subscription-permissions.service";
 
 @Injectable()
 export class ValidateUserService {
     private logger = new Logger(ValidateUserService.name)
-    constructor(private userCacheService: UserCacheService, private dbUtilsService: DatabaseUtilsService) { }
+    constructor(private userCacheService: UserCacheService, private dbUtilsService: DatabaseUtilsService, private subscriptionService: SubscriptionPermissionsService) { }
 
     async validateUser(payload: PayloadType) {
-        if (!payload) {
-            throw new BadRequestException('Invalid payload');
+        if (!payload?.email || !payload?.sub || payload.tokenVersion == null) {
+            throw new BadRequestException('Invalid payload: missing required fields');
         }
 
-        // Try to get user from cache first
-        const cachedUser = await this.userCacheService.getUserByEmail(payload.email)
+        const cachedUser = await this.userCacheService.getUserByEmail(payload.email);
 
         if (cachedUser) {
-            // Verify token version from cache
             if (payload.tokenVersion !== cachedUser.tokenVersion) {
-                // Token version mismatch - clear cache and reject
-                await this.userCacheService.clearUserById(cachedUser.id)
-                this.logger.error(
-                    `Token version mismatch for user ID ${cachedUser.id}. Token invalidated.`,
-                );
-                throw new UnauthorizedException(
-                    'Token has been invalidated. Please sign in again.',
-                );
+                await this.userCacheService.clearUserById(cachedUser.id);
+                this.logger.error(`Token version mismatch for user ID ${cachedUser.id}, email ${payload.email}`);
+                throw new UnauthorizedException('Token invalidated. Please sign in again.');
             }
-
             return cachedUser;
         }
 
-        // Cache miss - fetch from database
         const user = await this.dbUtilsService.findUserByUserIdOrEmail(payload.sub, undefined);
-
         if (!user) {
-            this.logger.error(
-                `User with ID ${payload.sub} not found during validation`,
-            );
+            this.logger.error(`User with ID ${payload.sub}, email ${payload.email} not found`);
             throw new UnauthorizedException('User not found');
         }
 
-        // Check if tokenVersion matches
         if (payload.tokenVersion !== user.tokenVersion) {
-            this.logger.error(
-                `Token version mismatch for user ID ${user.id}. Token invalidated.`,
-            );
-            throw new UnauthorizedException(
-                'Token has been invalidated. Please sign in again.',
-            );
+            this.logger.error(`Token version mismatch for user ID ${user.id}, email ${payload.email}`);
+            throw new UnauthorizedException('Token invalidated. Please sign in again.');
         }
 
-        // Fetch subscription info
         const subscription = await this.dbUtilsService.getUserSubscription(user.id);
+        const subIsActive = subscription ? this.subscriptionService.isSubscriptionActive(subscription) : false;
 
         const userWithSubscription = {
             ...user,
-            hasSubscription: !!subscription,
+            hasActiveSubscription: subIsActive,
             subscription: subscription || null,
-        }
+        };
 
-        // Cache user
-        await this.userCacheService.cacheUser(userWithSubscription)
+        await this.userCacheService.cacheUser(userWithSubscription);
 
         return userWithSubscription;
-    };
+    }
+
 }

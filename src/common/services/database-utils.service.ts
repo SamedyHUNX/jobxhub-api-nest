@@ -1,4 +1,4 @@
-import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable, UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
+import { JobListingApplicationTable, JobListingTable, OrganizationTable, OrganizationUserSettingsTable, UserResumeTable, UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { and, eq, or } from "drizzle-orm";
@@ -9,7 +9,7 @@ export class DatabaseUtilsService {
     constructor(private dbService: DrizzleHealthService) { }
 
     // UserTable
-    findUserByUserIdOrEmail = async (userId?: string, email?: string) => {
+    findUserByUserIdOrEmail = async (userId: string | null | undefined, email: string | null | undefined) => {
         if (!userId && !email) {
             this.logger.error('Missing userId or email');
             throw new BadRequestException('No userId or email provided');
@@ -37,7 +37,7 @@ export class DatabaseUtilsService {
 
             if (!user) {
                 this.logger.error(`User not found for email: ${email}`);
-                throw new NotFoundException(`User not found for email: ${email}`);
+                throw new NotFoundException("Invalid credentials");
             }
 
             return user;
@@ -157,5 +157,30 @@ export class DatabaseUtilsService {
                 )
             );
         return userSubscription;
+    }
+
+    // ResumeTable
+    getResumeByUserId = async (userId: string) => {
+        const [resume] = await this.dbService.getDb()
+            .select()
+            .from(UserResumeTable)
+            .where(eq(UserResumeTable.userId, userId))
+
+        return resume;
+    }
+
+    // Existing application for a job
+    existingApplication = async (jobListingId: string, userId: string) => {
+        const [application] = await this.dbService.getDb()
+            .select()
+            .from(JobListingApplicationTable)
+            .where(
+                and(
+                    eq(JobListingApplicationTable.jobListingId, jobListingId),
+                    eq(JobListingApplicationTable.userId, userId)
+                )
+            )
+
+        return application;
     }
 }

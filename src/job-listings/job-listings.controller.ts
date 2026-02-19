@@ -13,12 +13,11 @@ import {
 } from '@nestjs/common';
 import { JobListingsService } from './services/job-listings.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
-import { CreateJobListingDto, UpdateJobListingDto } from './dto/job-listings.dto';
+import { CreateJobListingApplicationDto, CreateJobListingDto, UpdateJobListingDto } from './dto/job-listings.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { User } from '@/types';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
-import { IdValidationPipe } from '@/utils/image-validation-pipe';
 
 @ApiTags('job-listings')
 @Controller('job-listings')
@@ -33,20 +32,27 @@ export class JobListingsController {
   async findAll(
     @CurrentUser() user: User,
     @Query('search') search?: string,
+    @Query('title') title?: string,
     @Query('organizationId') organizationId?: string,
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('locationRequirement') locationRequirement?: string,
-    @Query('experienceLevel') experienceLevel?: string,
+    @Query('experience') experience?: string,
+    @Query('city') city?: string,
+    @Query('state') state?: string,
+    @Query('jobIds') jobIds?: string | string[],
   ) {
     const jobListings = await this.jobListingsService.findAll(
       search,
+      title,
       organizationId,
       status,
       type,
       locationRequirement,
-      experienceLevel,
-      user.id
+      experience,
+      city,
+      state,
+      jobIds
     );
 
     return {
@@ -56,17 +62,17 @@ export class JobListingsController {
     }
   }
 
-  // Get a job listing based on Id: GET /job-listings/:id
-  @Get(':id')
+  // Get a job listing based on Id: GET /job-listings/:jobId
+  @Get(':jobId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   async findOne(
     @CurrentUser() user: User,
-    @Param('id') id: string,
+    @Param('jobId') jobId: string,
     @SelectedOrgId() orgId: string,
   ) {
     const jobListings = await this.jobListingsService.findOne(
-      id,
+      jobId,
       user.id,
       orgId
     );
@@ -89,14 +95,14 @@ export class JobListingsController {
     @CurrentUser() user: User,
     @SelectedOrgId() orgId: string,
   ) {
-    const jobListing = await this.jobListingsService.create(createJobListingDto, user.id, orgId);
+    const jobListing = await this.jobListingsService.create(createJobListingDto, user, orgId);
 
     return {
+      statusCode: 201,
       message: 'Job created successfully',
       data: {
         jobListings: [jobListing],
       },
-      statusCode: 201
     };
   }
 
@@ -148,5 +154,64 @@ export class JobListingsController {
         statusCode: 200,
       };
     }
+  }
+
+  // Get job listing application
+  @Get('/:jobId/application')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async getOwnJobListingApplication(
+    @Param('jobId') jobId: string,
+    @Query('userId') userId: string,
+  ) {
+    const application = await this.jobListingsService.getOwnJobListingApplication(
+      userId,
+      jobId,
+    );
+
+    return {
+      message: 'Job listing application fetched successfully',
+      data: application,
+      statusCode: 200,
+    };
+  }
+
+
+  // Get user resume
+  @Get('/:userId/resume')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async getUserResume(
+    @Param('userId') userId: string,
+  ) {
+    const resume = await this.jobListingsService.getUserResume(userId);
+
+    return {
+      message: 'User resume fetched successfully',
+      data: resume,
+      statusCode: 200,
+    };
+  }
+
+  // Create job listing application
+  @Post('/:jobId/application')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async createJobListingApplication(
+    @Param('jobId') jobId: string,
+    @CurrentUser() user: User,
+    @Body() createJobListingApplicationDto: CreateJobListingApplicationDto,
+  ) {
+    const application = await this.jobListingsService.createJobListingApplication(
+      user.id,
+      jobId,
+      createJobListingApplicationDto,
+    );
+
+    return {
+      message: 'Job listing application created successfully',
+      data: application,
+      statusCode: 200,
+    };
   }
 }

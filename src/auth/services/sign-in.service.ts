@@ -11,6 +11,8 @@ import * as Sentry from '@sentry/node';
 import { UserCacheService } from "@/cache/services/user-cache.service";
 import { JwtService } from '@nestjs/jwt';
 import { CachedUser } from "@/cache/types/cache.types";
+import { DatabaseUtilsService } from "@/common/services/database-utils.service";
+import { SubscriptionPermissionsService } from "@/permissions/services/subscription-permissions.service";
 
 @Injectable()
 export class SignInService {
@@ -23,14 +25,14 @@ export class SignInService {
         private readonly userCacheService: UserCacheService,
         private readonly rateLimitCache: RateLimitCacheService,
         private readonly jwtService: JwtService,
+        private readonly dbUtilsService: DatabaseUtilsService,
+        private readonly subscriptionService: SubscriptionPermissionsService
     ) {
     }
 
-    async signIn(data: SignInDto, ipAddress: string, user: User) {
-        if (user) {
-            throw new UnauthorizedException('User already signed in');
-        }
-        const { email, password } = data;
+    async signIn(dto: SignInDto, ipAddress: string) {
+        const { email, password } = dto;
+
         const startTime = Date.now();
 
         try {
@@ -102,11 +104,7 @@ export class SignInService {
 
                 await this.userCacheService.cacheUser(user)
             } else {
-                const [dbUser] = await this.dbService.getDb()
-                    .select()
-                    .from(UserTable)
-                    .where(eq(UserTable.email, email))
-                    .limit(1);
+                const dbUser = await this.dbUtilsService.findUserByUserIdOrEmail(undefined, email);
 
                 if (!dbUser) {
                     await this.rateLimitCache.handleFailedLogin(email, ipAddress, 'user_not_found');
@@ -133,8 +131,6 @@ export class SignInService {
 
                 passwordHash = dbUser.password;
                 user = dbUser;
-
-                await this.userCacheService.cacheUser(user)
             }
 
             const isPasswordValid = await this.hashingService.verify(passwordHash, password);
@@ -144,6 +140,17 @@ export class SignInService {
                 await this.rateLimitCache.addConstantTimeDelay(startTime);
                 throw new UnauthorizedException('Invalid credentials');
             }
+
+            const subscription = await this.dbUtilsService.getUserSubscription(user.id);
+            const subIsActive = subscription ? this.subscriptionService.isSubscriptionActive(subscription) : false;
+
+            const userWithSubscription = {
+                ...user,
+                hasActiveSubscription: subIsActive,
+                subscription: subscription || null,
+            };
+
+            await this.userCacheService.cacheUser(userWithSubscription)
 
             // Successful login - clear failed attempts
             await this.rateLimitCache.clearFailedAttempts(email, ipAddress);
