@@ -1,13 +1,13 @@
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
-import { ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { CreateJobListingApplicationDto, CreateJobListingDto, UpdateJobListingDto } from '../dto/job-listings.dto';
 import { JobListingApplicationTable, JobListingTable, OrganizationTable, UserResumeTable } from '@/drizzle/schema';
 import { and, desc, eq, like, or, count, SQL, inArray } from 'drizzle-orm';
 import type { User } from '@/types';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
-import { ConfigService } from '@/common/services/config.service';
 import * as Sentry from '@sentry/nestjs';
 import { DatabaseUtilsService } from '@/common/services/database-utils.service';
+import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 
 @Injectable()
 export class JobListingsService {
@@ -16,9 +16,9 @@ export class JobListingsService {
   constructor(
     private dbService: DrizzleHealthService,
     private appPermission: AppPermissionService,
-    private readonly config: ConfigService,
     private dbUtilsService: DatabaseUtilsService,
-    private appPermissionService: AppPermissionService
+    private appPermissionService: AppPermissionService,
+    private inngestService: InngestHealthService
   ) { }
 
   create = async (data: CreateJobListingDto, user: User, orgId: string) => {
@@ -331,18 +331,28 @@ export class JobListingsService {
 
   // Create job listing application
   createJobListingApplication = async (userId: string, jobId: string, dto: CreateJobListingApplicationDto) => {
-    const [jobListing, userResume] = await Promise.all([
+    const [jobListing, userResume, existingApplication] = await Promise.all([
       this.dbUtilsService.getJobListingById(jobId),
-      this.dbUtilsService.getResumeByUserId(userId)
+      this.dbUtilsService.getResumeByUserId(userId),
+      this.dbUtilsService.existingApplication(jobId, userId)
     ])
 
     if (!jobListing) {
       throw new NotFoundException('Job listing not found');
     }
 
+    if (existingApplication) {
+      throw new ConflictException('You have already applied for this job');
+    }
+
     if (!userResume) {
       throw new NotFoundException('User resume not found. Please upload your resume before applying');
     }
+
+    await this.inngestService.getInngest().send({
+      name: "jobxhub/job_listing_application.created",
+      data: { jobId, userId }
+    })
 
     const application = await this.dbService.getDb()
       .insert(JobListingApplicationTable)
@@ -351,7 +361,7 @@ export class JobListingsService {
         userId: userId,
         coverLetter: dto.coverLetter,
       })
-      .returning();
+      .returning()
 
     return application
   }

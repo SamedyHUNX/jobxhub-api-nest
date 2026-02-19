@@ -1,4 +1,4 @@
-import { JobListingTable, OrganizationTable, OrganizationUserSettingsTable, UserResumeTable, UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
+import { JobListingApplicationTable, JobListingTable, OrganizationTable, OrganizationUserSettingsTable, UserResumeTable, UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { and, eq, or } from "drizzle-orm";
@@ -167,5 +167,20 @@ export class DatabaseUtilsService {
             .where(eq(UserResumeTable.userId, userId))
 
         return resume;
+    }
+
+    // Existing application for a job
+    existingApplication = async (jobListingId: string, userId: string) => {
+        const [application] = await this.dbService.getDb()
+            .select()
+            .from(JobListingApplicationTable)
+            .where(
+                and(
+                    eq(JobListingApplicationTable.jobListingId, jobListingId),
+                    eq(JobListingApplicationTable.userId, userId)
+                )
+            )
+
+        return application;
     }
 }

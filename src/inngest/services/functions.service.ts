@@ -10,12 +10,12 @@ export class UserFunctionsService {
   private forgotPasswordFunction;
 
   constructor(
-    private readonly inngestHealth: InngestHealthService,
+    private readonly inngestService: InngestHealthService,
     private readonly emailService: EmailService,
   ) {
     this.logger.log('Initializing Inngest functions...');
 
-    this.createUserFunction = this.inngest.createFunction(
+    this.createUserFunction = this.inngestService.getInngest().createFunction(
       { id: 'jobxhub/create-db-user', name: 'JobXHub - Create DB User' },
       { event: 'jobxhub/user.created' },
       async ({ event, step }) => {
@@ -69,7 +69,7 @@ export class UserFunctionsService {
 
     this.logger.log('User created function registered: jobxhub/create-db-user');
 
-    this.forgotPasswordFunction = this.inngest.createFunction(
+    this.forgotPasswordFunction = this.inngestService.getInngest().createFunction(
       {
         id: 'jobxhub/user.reset_password',
         name: 'JobXHub - Handle Password Reset Request',
@@ -123,10 +123,6 @@ export class UserFunctionsService {
       'Password reset function registered: jobxhub/user.reset_password',
     );
     this.logger.log('All Inngest functions initialized successfully');
-  }
-
-  private get inngest() {
-    return this.inngestHealth.getInngest();
   }
 
   getFunctions() {

@@ -199,11 +199,11 @@ export class JobListingsController {
   @UseGuards(JwtAuthGuard)
   async createJobListingApplication(
     @Param('jobId') jobId: string,
-    @Query('userId') userId: string,
+    @CurrentUser() user: User,
     @Body() createJobListingApplicationDto: CreateJobListingApplicationDto,
   ) {
     const application = await this.jobListingsService.createJobListingApplication(
-      userId,
+      user.id,
       jobId,
       createJobListingApplicationDto,
     );
