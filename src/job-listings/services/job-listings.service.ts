@@ -8,6 +8,7 @@ import { AppPermissionService } from '@/permissions/services/app-permissions.ser
 import * as Sentry from '@sentry/nestjs';
 import { DatabaseUtilsService } from '@/common/services/database-utils.service';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
+import { S3HealthService } from '@/s3/services/s3-health.service';
 
 @Injectable()
 export class JobListingsService {
@@ -18,7 +19,8 @@ export class JobListingsService {
     private appPermission: AppPermissionService,
     private dbUtilsService: DatabaseUtilsService,
     private appPermissionService: AppPermissionService,
-    private inngestService: InngestHealthService
+    private inngestService: InngestHealthService,
+    private s3Service: S3HealthService
   ) { }
 
   create = async (data: CreateJobListingDto, user: User, orgId: string) => {
@@ -365,4 +367,31 @@ export class JobListingsService {
 
     return application
   }
+
+  // Upload resume
+  uploadResume = async (userId: string, file: Express.Multer.File) => {
+    const existingResume = await this.dbUtilsService.getResumeByUserId(userId);
+
+    if (existingResume) {
+      throw new ConflictException('You have already uploaded a resume. Please delete it before uploading a new one');
+    }
+
+    const { key: resumeKey, url: resumeUrl } = await this.s3Service.s3().uploadFileAndGetUrl(file, 'pdf', 'resumes');
+
+    try {
+      const resume = await this.dbService.getDb()
+        .insert(UserResumeTable)
+        .values({
+          userId: userId,
+          resumeFileUrl: resumeUrl,
+          resumeFileKey: resumeKey,
+        })
+        .returning();
+
+      return resume;
+    } catch (error) {
+      await this.s3Service.s3().deleteFile(resumeKey);
+      throw error;
+    }
+  };
 }

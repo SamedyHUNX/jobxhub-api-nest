@@ -2,14 +2,19 @@ import {
   Body,
   Controller,
   Delete,
+  FileTypeValidator,
   Get,
   HttpCode,
   HttpStatus,
+  MaxFileSizeValidator,
   Param,
+  ParseFilePipe,
   Post,
   Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { JobListingsService } from './services/job-listings.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
@@ -18,6 +23,7 @@ import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { User } from '@/types';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('job-listings')
 @Controller('job-listings')
@@ -211,6 +217,33 @@ export class JobListingsController {
     return {
       message: 'Job listing application created successfully',
       data: application,
+      statusCode: 200,
+    };
+  }
+
+  // Upload resume
+  @Post('/resume')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadResume(
+    @CurrentUser() user: User,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: 'application/pdf' }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    console.log('hi', file)
+    const resume = await this.jobListingsService.uploadResume(user.id, file);
+
+    return {
+      message: 'Resume uploaded successfully',
+      data: resume,
       statusCode: 200,
     };
   }
