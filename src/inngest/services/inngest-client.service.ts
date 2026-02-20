@@ -10,15 +10,18 @@ export class InngestClientService {
 
   constructor(private configService: ConfigService) {
     const eventKey = this.configService.inngestEventKey;
+    const signingKey = this.configService.inngestSigningKey;
     this.logger.log(`Initializing Inngest client with id: jobxhub`);
     this.logger.debug(`Inngest event key configured: ${eventKey ? 'Yes' : 'No'}`);
-    
+    this.logger.debug(`Inngest signing key configured: ${signingKey ? 'Yes' : 'No'}`);
+
     this.inngest = new Inngest({
       id: 'jobxhub',
       schemas: new EventSchemas().fromRecord<Events>(),
       eventKey: eventKey,
+      signingKey: signingKey,
     });
-    
+
     this.logger.log('Inngest client initialized successfully');
   }
 }

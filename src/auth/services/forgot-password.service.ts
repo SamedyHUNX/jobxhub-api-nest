@@ -7,7 +7,6 @@ import { InngestHealthService } from "@/inngest/services/inngest-health.service"
 import { HttpException, HttpStatus, Injectable, Logger } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import * as Sentry from "@sentry/nestjs"
-import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 
 @Injectable()
 export class ForgotPasswordService {
@@ -18,7 +17,6 @@ export class ForgotPasswordService {
         private tokenService: TokenService,
         private readonly configService: ConfigService,
         private inngestService: InngestHealthService,
-        private dbUtilsService: DatabaseUtilsService
     ) { }
 
     async forgotPassword(
@@ -59,7 +57,11 @@ export class ForgotPasswordService {
             const emailRateLimited = emailAttempts > 3;
 
             // Find user by email (always execute)
-            const user = await this.dbUtilsService.findUserByUserIdOrEmail(undefined, email);
+            const [user] = await this.dbService.getDb()
+                .select()
+                .from(UserTable)
+                .where(eq(UserTable.email, email))
+                .limit(1);
 
             userExists = !!user;
 
