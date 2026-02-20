@@ -1,7 +1,7 @@
 import { All, Controller, Logger, Req, Res } from '@nestjs/common';
 import { serve } from 'inngest/express';
-import { UserFunctionsService } from './services/user-functions.service';
 import { InngestHealthService } from './services/inngest-health.service';
+import { AuthFunctions } from './services/functions/auth.functions';
 
 @Controller('inngest')
 export class InngestController {
@@ -10,7 +10,7 @@ export class InngestController {
 
   constructor(
     private readonly inngestService: InngestHealthService,
-    private readonly userFunctionsService: UserFunctionsService,
+    private readonly authFunctions: AuthFunctions,
   ) { }
 
   @All()
@@ -18,7 +18,7 @@ export class InngestController {
     if (!this.handler) {
       this.handler = serve({
         client: this.inngestService.getInngest(),
-        functions: this.userFunctionsService.getFunctions(),
+        functions: this.authFunctions.getFunctions(),
       });
       this.logger.log('Inngest handler initialized');
     }
