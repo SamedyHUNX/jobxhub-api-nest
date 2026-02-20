@@ -367,6 +367,11 @@ export class JobListingsService {
 
     const { key: resumeKey, url: resumeUrl } = await this.s3Service.s3().uploadFileAndGetUrl(file, 'pdf', 'resumes');
 
+    this.inngestService.getInngest().send({
+      name: "app/resume.uploaded",
+      user: { id: userId }
+    })
+
     try {
       const resume = await this.dbService.getDb()
         .insert(UserResumeTable)
@@ -393,5 +398,22 @@ export class JobListingsService {
     }
 
     return existingResume
+  }
+
+  // Delete user resume
+  deleteUserResume = async (userId: string) => {
+    const existingResume = await this.dbUtilsService.getResumeByUserId(userId)
+
+    if (!existingResume) {
+      throw new NotFoundException('You have not uploaded any resume yet.')
+    }
+
+    await this.s3Service.s3().deleteFile(existingResume.resumeFileKey);
+
+    await this.dbService.getDb()
+      .delete(UserResumeTable)
+      .where(eq(UserResumeTable.userId, userId));
+
+    return true
   }
 }

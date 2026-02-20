@@ -64,5 +64,10 @@ export type Events = {
       jobListingId: string;
       userId: string
     }
+  };
+  'jobxhub/resume.uploaded': {
+    user: {
+      id: string
+    }
   }
 };

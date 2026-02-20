@@ -246,4 +246,22 @@ export class JobListingsController {
       statusCode: 200,
     };
   }
+
+  // Delete user resume
+  @Delete('/resume/:userId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async deleteUserResume(
+    @Param('userId') userId: string,
+  ) {
+    const success = await this.jobListingsService.deleteUserResume(userId);
+
+    if (success) {
+      return {
+        message: 'User resume deleted successfully',
+        data: [],
+        statusCode: 200,
+      };
+    }
+  }
 }
