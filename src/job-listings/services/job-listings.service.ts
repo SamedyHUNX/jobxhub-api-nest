@@ -320,17 +320,6 @@ export class JobListingsService {
     return applications
   }
 
-  // Get user resume
-  getUserResume = async (userId: string) => {
-    const resume = await this.dbService.getDb()
-      .select()
-      .from(UserResumeTable).where(eq(UserResumeTable.userId, userId))
-
-    console.log(resume)
-
-    return resume
-  }
-
   // Create job listing application
   createJobListingApplication = async (userId: string, jobId: string, dto: CreateJobListingApplicationDto) => {
     const [jobListing, userResume, existingApplication] = await Promise.all([
@@ -394,4 +383,15 @@ export class JobListingsService {
       throw error;
     }
   };
+
+  // Get user resume
+  getUserResume = async (userId: string) => {
+    const existingResume = await this.dbUtilsService.getResumeByUserId(userId)
+
+    if (!existingResume) {
+      throw new NotFoundException('You have not uploaded any resume yet.')
+    }
+
+    return existingResume
+  }
 }

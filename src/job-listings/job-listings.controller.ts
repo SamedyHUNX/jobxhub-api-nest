@@ -182,23 +182,6 @@ export class JobListingsController {
     };
   }
 
-
-  // Get user resume
-  @Get('/:userId/resume')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
-  async getUserResume(
-    @Param('userId') userId: string,
-  ) {
-    const resume = await this.jobListingsService.getUserResume(userId);
-
-    return {
-      message: 'User resume fetched successfully',
-      data: resume,
-      statusCode: 200,
-    };
-  }
-
   // Create job listing application
   @Post('/:jobId/application')
   @HttpCode(HttpStatus.OK)
@@ -243,7 +226,23 @@ export class JobListingsController {
 
     return {
       message: 'Resume uploaded successfully',
-      data: resume,
+      data: [resume],
+      statusCode: 200,
+    };
+  }
+
+  // Get user resume
+  @Get('/resume/:userId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async getUserResume(
+    @Param('userId') userId: string,
+  ) {
+    const resume = await this.jobListingsService.getUserResume(userId);
+
+    return {
+      message: 'User resume fetched successfully',
+      data: [resume],
       statusCode: 200,
     };
   }
