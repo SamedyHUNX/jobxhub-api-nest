@@ -66,8 +66,8 @@ export type Events = {
     }
   };
   'jobxhub/resume.uploaded': {
-    user: {
-      id: string
+    data: {
+      userId: string;
     }
   }
 };

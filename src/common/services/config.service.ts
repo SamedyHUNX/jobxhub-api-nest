@@ -196,6 +196,11 @@ export class ConfigService {
     return this.configService.getOrThrow<string>('EMAIL_FROM');
   }
 
+  // AI
+  get anthropicApiKey(): string {
+    return this.configService.getOrThrow<string>('ANTHROPIC_API_KEY');
+  }
+
   get<T>(key: string): T | undefined {
     return this.configService.get<T>(key);
   }

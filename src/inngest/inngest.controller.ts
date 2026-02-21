@@ -2,6 +2,7 @@ import { All, Controller, Logger, Req, Res } from '@nestjs/common';
 import { serve } from 'inngest/express';
 import { InngestHealthService } from './services/inngest-health.service';
 import { AuthFunctions } from './services/functions/auth.functions';
+import { AiFunctions } from './services/functions/ai.functions';
 
 @Controller('inngest')
 export class InngestController {
@@ -11,6 +12,7 @@ export class InngestController {
   constructor(
     private readonly inngestService: InngestHealthService,
     private readonly authFunctions: AuthFunctions,
+    private readonly aiFunctions: AiFunctions,
   ) { }
 
   @All()
@@ -18,7 +20,7 @@ export class InngestController {
     if (!this.handler) {
       this.handler = serve({
         client: this.inngestService.getInngest(),
-        functions: this.authFunctions.getFunctions(),
+        functions: [...this.authFunctions.getFunctions(), ...this.aiFunctions.getFunctions()],
       });
       this.logger.log('Inngest handler initialized');
     }

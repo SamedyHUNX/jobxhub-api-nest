@@ -221,7 +221,6 @@ export class JobListingsController {
     )
     file: Express.Multer.File,
   ) {
-    console.log('hi', file)
     const resume = await this.jobListingsService.uploadResume(user.id, file);
 
     return {

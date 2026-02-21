@@ -183,4 +183,15 @@ export class DatabaseUtilsService {
 
         return application;
     }
+
+    // Update Resume
+    updateResume = async (userId: string, data: Partial<typeof UserResumeTable.$inferInsert>) => {
+        const [resume] = await this.dbService.getDb()
+            .update(UserResumeTable)
+            .set(data)
+            .where(eq(UserResumeTable.userId, userId))
+            .returning();
+
+        return resume;
+    }
 }

@@ -367,11 +367,6 @@ export class JobListingsService {
 
     const { key: resumeKey, url: resumeUrl } = await this.s3Service.s3().uploadFileAndGetUrl(file, 'pdf', 'resumes');
 
-    this.inngestService.getInngest().send({
-      name: "app/resume.uploaded",
-      user: { id: userId }
-    })
-
     try {
       const resume = await this.dbService.getDb()
         .insert(UserResumeTable)
@@ -381,6 +376,12 @@ export class JobListingsService {
           resumeFileKey: resumeKey,
         })
         .returning();
+
+      // Send AFTER the DB insert so the resume row exists when the Inngest function queries it
+      this.inngestService.getInngest().send({
+        name: "jobxhub/resume.uploaded",
+        data: { userId }
+      });
 
       return resume;
     } catch (error) {
