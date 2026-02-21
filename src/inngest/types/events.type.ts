@@ -61,8 +61,8 @@ export type Events = {
   };
   'jobxhub/job_listing_application.created': {
     data: {
-      jobListingId: string;
-      userId: string
+      jobId: string;
+      userId: string;
     }
   };
   'jobxhub/resume.uploaded': {

@@ -194,4 +194,34 @@ export class DatabaseUtilsService {
 
         return resume;
     }
+
+    // Get cover letter
+    getCoverLetter = async (userId: string, jobId: string) => {
+        const [result] = await this.dbService.getDb()
+            .select({ coverLetter: JobListingApplicationTable.coverLetter })
+            .from(JobListingApplicationTable)
+            .where(
+                and(
+                    eq(JobListingApplicationTable.jobListingId, jobId),
+                    eq(JobListingApplicationTable.userId, userId)
+                )
+            );
+
+        return result?.coverLetter;
+    };
+
+    updateJobListingApplication = async (jobListingId: string, userId: string, data: Partial<typeof JobListingApplicationTable.$inferInsert>) => {
+        const [application] = await this.dbService.getDb()
+            .update(JobListingApplicationTable)
+            .set(data)
+            .where(
+                and(
+                    eq(JobListingApplicationTable.jobListingId, jobListingId),
+                    eq(JobListingApplicationTable.userId, userId)
+                )
+            )
+            .returning();
+
+        return application;
+    };
 }

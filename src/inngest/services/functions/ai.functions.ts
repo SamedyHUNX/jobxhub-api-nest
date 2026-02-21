@@ -1,20 +1,22 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { InngestHealthService } from "../inngest-health.service";
-import * as Sentry from '@sentry/node';
 import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 import { ConfigService } from "@/common/services/config.service";
 import Anthropic from "@anthropic-ai/sdk";
+import { ApplicantRankingAgentService } from "../agents/ApplicantRankingAgentService";
 
 @Injectable()
 export class AiFunctions implements OnModuleInit {
     private readonly logger = new Logger(AiFunctions.name);
     private createAiSummaryOfUploadedResume;
+    private rankApplication;
     private anthropic: Anthropic;
 
     constructor(
         private readonly inngestService: InngestHealthService,
         private readonly dbUtilsService: DatabaseUtilsService,
-        private readonly configService: ConfigService
+        private readonly configService: ConfigService,
+        private readonly applicantRankingAgentService: ApplicantRankingAgentService,
     ) { }
 
     onModuleInit() {
@@ -72,9 +74,38 @@ export class AiFunctions implements OnModuleInit {
                 });
             },
         );
+
+        this.rankApplication = this.inngestService.getInngest().createFunction(
+            { id: 'jobxhub/rank-application', name: 'JobXHub - Rank Application' },
+            { event: 'jobxhub/job_listing_application.created' },
+            async ({ event, step }) => {
+                const { userId, jobId } = event.data;
+
+                const getCoverLetter = step.run('get-cover-letter', async () => {
+                    return await this.dbUtilsService.getCoverLetter(userId, jobId);
+                });
+
+                const getJobListing = step.run('get-job-listing', async () => {
+                    return await this.dbUtilsService.getJobListingById(jobId);
+                });
+
+
+                const getUserResume = step.run('get-user-resume', async () => {
+                    return await this.dbUtilsService.getResumeByUserId(userId);
+                });
+
+                const [coverLetter, jobListing, userResume] = await Promise.all([getCoverLetter, getJobListing, getUserResume]);
+
+                const resumeSummary = userResume?.aiSummary;
+
+                if (!coverLetter || !jobListing || !resumeSummary) return;
+
+                await this.applicantRankingAgentService.applicantRankingAgent.run(JSON.stringify({ coverLetter, resumeSummary, jobListing, userId }))
+            },
+        );
     }
 
     getFunctions() {
-        return [this.createAiSummaryOfUploadedResume];
+        return [this.createAiSummaryOfUploadedResume, this.rankApplication];
     }
 }

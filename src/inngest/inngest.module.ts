@@ -5,6 +5,7 @@ import { CommonModule } from '@/common/common.module';
 import { InngestClientService } from './services/inngest-client.service';
 import { AuthFunctions } from './services/functions/auth.functions';
 import { AiFunctions } from './services/functions/ai.functions';
+import { ApplicantRankingAgentService } from './services/agents/ApplicantRankingAgentService';
 
 @Module({
   imports: [CommonModule],
@@ -14,6 +15,7 @@ import { AiFunctions } from './services/functions/ai.functions';
     InngestClientService,
     AuthFunctions,
     AiFunctions,
+    ApplicantRankingAgentService,
   ],
   exports: [InngestHealthService, InngestClientService],
 })

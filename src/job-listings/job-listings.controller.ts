@@ -163,15 +163,15 @@ export class JobListingsController {
   }
 
   // Get job listing application
-  @Get('/:jobId/application')
+  @Get('/application/:jobId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   async getOwnJobListingApplication(
     @Param('jobId') jobId: string,
-    @Query('userId') userId: string,
+    @CurrentUser() user: User,
   ) {
     const application = await this.jobListingsService.getOwnJobListingApplication(
-      userId,
+      user.id,
       jobId,
     );
 

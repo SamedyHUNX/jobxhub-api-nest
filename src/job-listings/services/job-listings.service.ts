@@ -310,7 +310,7 @@ export class JobListingsService {
     const jobListing = await this.dbUtilsService.getJobListingById(jobId);
 
     if (!jobListing) {
-      throw new NotFoundException('Job listing not found');
+      return [];
     }
 
     const applications = await this.dbService.getDb()
@@ -340,11 +340,6 @@ export class JobListingsService {
       throw new NotFoundException('User resume not found. Please upload your resume before applying');
     }
 
-    await this.inngestService.getInngest().send({
-      name: "jobxhub/job_listing_application.created",
-      data: { jobId, userId }
-    })
-
     const application = await this.dbService.getDb()
       .insert(JobListingApplicationTable)
       .values({
@@ -353,6 +348,11 @@ export class JobListingsService {
         coverLetter: dto.coverLetter,
       })
       .returning()
+
+    await this.inngestService.getInngest().send({
+      name: "jobxhub/job_listing_application.created",
+      data: { jobId, userId }
+    })
 
     return application
   }
