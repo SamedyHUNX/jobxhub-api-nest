@@ -1,37 +1,30 @@
-import { All, Controller, Logger, OnModuleInit, Req, Res } from '@nestjs/common';
+import { All, Controller, Logger, Req, Res } from '@nestjs/common';
 import { serve } from 'inngest/express';
-import { UserFunctionsService } from './services/user-functions.service';
 import { InngestHealthService } from './services/inngest-health.service';
+import { AuthFunctions } from './services/functions/auth.functions';
+import { AiFunctions } from './services/functions/ai.functions';
 
 @Controller('inngest')
-export class InngestController implements OnModuleInit {
+export class InngestController {
   private readonly logger = new Logger(InngestController.name);
+  private handler: ReturnType<typeof serve> | null = null;
 
   constructor(
-    private readonly inngestHealthService: InngestHealthService,
-    private readonly userFunctionsService: UserFunctionsService,
-  ) {}
-
-  onModuleInit() {
-    const functions = this.userFunctionsService.getFunctions();
-    this.logger.log(`Inngest controller initialized with ${functions.length} functions`);
-    functions.forEach((fn, index) => {
-      this.logger.log(`Function ${index + 1}: ${fn?.id ?? 'unknown'}`);
-    });
-  }
+    private readonly inngestService: InngestHealthService,
+    private readonly authFunctions: AuthFunctions,
+    private readonly aiFunctions: AiFunctions,
+  ) { }
 
   @All()
-  handleInngest(@Req() req, @Res() res) {
-    this.logger.debug(`Inngest endpoint called: ${req.method} ${req.url}`);
+  handleInngest(@Req() req: Request, @Res() res: Response) {
+    if (!this.handler) {
+      this.handler = serve({
+        client: this.inngestService.getInngest(),
+        functions: [...this.authFunctions.getFunctions(), ...this.aiFunctions.getFunctions()],
+      });
+      this.logger.log('Inngest handler initialized');
+    }
 
-    const functions = this.userFunctionsService.getFunctions();
-    this.logger.debug(`Serving ${functions.length} functions to Inngest`);
-
-    const handler = serve({
-      client: this.inngestHealthService.getInngest(),
-      functions,
-    });
-
-    return handler(req, res);
+    return this.handler(req, res);
   }
 }

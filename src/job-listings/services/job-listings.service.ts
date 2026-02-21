@@ -8,6 +8,7 @@ import { AppPermissionService } from '@/permissions/services/app-permissions.ser
 import * as Sentry from '@sentry/nestjs';
 import { DatabaseUtilsService } from '@/common/services/database-utils.service';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
+import { S3HealthService } from '@/s3/services/s3-health.service';
 
 @Injectable()
 export class JobListingsService {
@@ -18,7 +19,8 @@ export class JobListingsService {
     private appPermission: AppPermissionService,
     private dbUtilsService: DatabaseUtilsService,
     private appPermissionService: AppPermissionService,
-    private inngestService: InngestHealthService
+    private inngestService: InngestHealthService,
+    private s3Service: S3HealthService
   ) { }
 
   create = async (data: CreateJobListingDto, user: User, orgId: string) => {
@@ -308,7 +310,7 @@ export class JobListingsService {
     const jobListing = await this.dbUtilsService.getJobListingById(jobId);
 
     if (!jobListing) {
-      throw new NotFoundException('Job listing not found');
+      return [];
     }
 
     const applications = await this.dbService.getDb()
@@ -316,17 +318,6 @@ export class JobListingsService {
       .from(JobListingApplicationTable).where(and(eq(JobListingApplicationTable.jobListingId, jobId), eq(JobListingApplicationTable.userId, userId)))
 
     return applications
-  }
-
-  // Get user resume
-  getUserResume = async (userId: string) => {
-    const resume = await this.dbService.getDb()
-      .select()
-      .from(UserResumeTable).where(eq(UserResumeTable.userId, userId))
-
-    console.log(resume)
-
-    return resume
   }
 
   // Create job listing application
@@ -349,11 +340,6 @@ export class JobListingsService {
       throw new NotFoundException('User resume not found. Please upload your resume before applying');
     }
 
-    await this.inngestService.getInngest().send({
-      name: "jobxhub/job_listing_application.created",
-      data: { jobId, userId }
-    })
-
     const application = await this.dbService.getDb()
       .insert(JobListingApplicationTable)
       .values({
@@ -363,6 +349,72 @@ export class JobListingsService {
       })
       .returning()
 
+    await this.inngestService.getInngest().send({
+      name: "jobxhub/job_listing_application.created",
+      data: { jobId, userId }
+    })
+
     return application
+  }
+
+  // Upload resume
+  uploadResume = async (userId: string, file: Express.Multer.File) => {
+    const existingResume = await this.dbUtilsService.getResumeByUserId(userId);
+
+    if (existingResume) {
+      throw new ConflictException('You have already uploaded a resume. Please delete it before uploading a new one');
+    }
+
+    const { key: resumeKey, url: resumeUrl } = await this.s3Service.s3().uploadFileAndGetUrl(file, 'pdf', 'resumes');
+
+    try {
+      const resume = await this.dbService.getDb()
+        .insert(UserResumeTable)
+        .values({
+          userId: userId,
+          resumeFileUrl: resumeUrl,
+          resumeFileKey: resumeKey,
+        })
+        .returning();
+
+      // Send AFTER the DB insert so the resume row exists when the Inngest function queries it
+      this.inngestService.getInngest().send({
+        name: "jobxhub/resume.uploaded",
+        data: { userId }
+      });
+
+      return resume;
+    } catch (error) {
+      await this.s3Service.s3().deleteFile(resumeKey);
+      throw error;
+    }
+  };
+
+  // Get user resume
+  getUserResume = async (userId: string) => {
+    const existingResume = await this.dbUtilsService.getResumeByUserId(userId)
+
+    if (!existingResume) {
+      throw new NotFoundException('You have not uploaded any resume yet.')
+    }
+
+    return existingResume
+  }
+
+  // Delete user resume
+  deleteUserResume = async (userId: string) => {
+    const existingResume = await this.dbUtilsService.getResumeByUserId(userId)
+
+    if (!existingResume) {
+      throw new NotFoundException('You have not uploaded any resume yet.')
+    }
+
+    await this.s3Service.s3().deleteFile(existingResume.resumeFileKey);
+
+    await this.dbService.getDb()
+      .delete(UserResumeTable)
+      .where(eq(UserResumeTable.userId, userId));
+
+    return true
   }
 }

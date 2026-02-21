@@ -2,14 +2,19 @@ import {
   Body,
   Controller,
   Delete,
+  FileTypeValidator,
   Get,
   HttpCode,
   HttpStatus,
+  MaxFileSizeValidator,
   Param,
+  ParseFilePipe,
   Post,
   Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { JobListingsService } from './services/job-listings.service';
 import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
@@ -18,6 +23,7 @@ import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { User } from '@/types';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('job-listings')
 @Controller('job-listings')
@@ -157,38 +163,21 @@ export class JobListingsController {
   }
 
   // Get job listing application
-  @Get('/:jobId/application')
+  @Get('/application/:jobId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   async getOwnJobListingApplication(
     @Param('jobId') jobId: string,
-    @Query('userId') userId: string,
+    @CurrentUser() user: User,
   ) {
     const application = await this.jobListingsService.getOwnJobListingApplication(
-      userId,
+      user.id,
       jobId,
     );
 
     return {
       message: 'Job listing application fetched successfully',
       data: application,
-      statusCode: 200,
-    };
-  }
-
-
-  // Get user resume
-  @Get('/:userId/resume')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
-  async getUserResume(
-    @Param('userId') userId: string,
-  ) {
-    const resume = await this.jobListingsService.getUserResume(userId);
-
-    return {
-      message: 'User resume fetched successfully',
-      data: resume,
       statusCode: 200,
     };
   }
@@ -213,5 +202,65 @@ export class JobListingsController {
       data: application,
       statusCode: 200,
     };
+  }
+
+  // Upload resume
+  @Post('/resume')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadResume(
+    @CurrentUser() user: User,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: 'application/pdf' }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    const resume = await this.jobListingsService.uploadResume(user.id, file);
+
+    return {
+      message: 'Resume uploaded successfully',
+      data: [resume],
+      statusCode: 200,
+    };
+  }
+
+  // Get user resume
+  @Get('/resume/:userId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async getUserResume(
+    @Param('userId') userId: string,
+  ) {
+    const resume = await this.jobListingsService.getUserResume(userId);
+
+    return {
+      message: 'User resume fetched successfully',
+      data: [resume],
+      statusCode: 200,
+    };
+  }
+
+  // Delete user resume
+  @Delete('/resume/:userId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async deleteUserResume(
+    @Param('userId') userId: string,
+  ) {
+    const success = await this.jobListingsService.deleteUserResume(userId);
+
+    if (success) {
+      return {
+        message: 'User resume deleted successfully',
+        data: [],
+        statusCode: 200,
+      };
+    }
   }
 }
