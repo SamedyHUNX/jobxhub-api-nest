@@ -37,6 +37,20 @@ export interface RawBodyRequest<T extends Request = Request> extends Request {
     rawBody: Buffer;
 }
 
+export interface JobListing {
+    id: string;
+    title: string;
+    description: string;
+    locationRequirement: string;
+    experienceLevel: string;
+    wageInterval: string;
+    stateAbbreviation: string;
+    city: string;
+    wage: number;
+    status: string;
+    type: string;
+}
+
 // Derived union types (always match arrays above)
 export type WageInterval = (typeof wageIntervals)[number];
 export type LocationRequirement = (typeof locationRequirements)[number];

@@ -3,12 +3,14 @@ import { ConflictException, ForbiddenException, Injectable, InternalServerErrorE
 import { CreateJobListingApplicationDto, CreateJobListingDto, UpdateJobListingDto } from '../dto/job-listings.dto';
 import { JobListingApplicationTable, JobListingTable, OrganizationTable, UserResumeTable } from '@/drizzle/schema';
 import { and, desc, eq, like, or, count, SQL, inArray } from 'drizzle-orm';
-import type { User } from '@/types';
+import type { JobListing, User } from '@/types';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import * as Sentry from '@sentry/nestjs';
 import { DatabaseUtilsService } from '@/common/services/database-utils.service';
 import { InngestHealthService } from '@/inngest/services/inngest-health.service';
 import { S3HealthService } from '@/s3/services/s3-health.service';
+import { JobMatchingAgentService } from '@/agents/services/job-matching-agent.service';
+import { getLastOutputMessage } from '@/utils/agents';
 
 @Injectable()
 export class JobListingsService {
@@ -20,7 +22,8 @@ export class JobListingsService {
     private dbUtilsService: DatabaseUtilsService,
     private appPermissionService: AppPermissionService,
     private inngestService: InngestHealthService,
-    private s3Service: S3HealthService
+    private s3Service: S3HealthService,
+    private jobMatchingAgentService: JobMatchingAgentService,
   ) { }
 
   create = async (data: CreateJobListingDto, user: User, orgId: string) => {
@@ -71,7 +74,8 @@ export class JobListingsService {
     search?: string,
     title?: string,
     organizationId?: string,
-    status?: string, type?: string,
+    status?: string,
+    type?: string,
     locationRequirement?: string,
     experience?: string,
     city?: string,
@@ -416,5 +420,31 @@ export class JobListingsService {
       .where(eq(UserResumeTable.userId, userId));
 
     return true
+  }
+
+  // Get Job Listing AI Search Results
+  getJobListingAISearchResults = async (userId: string, query: string) => {
+    const jobListings = await this.findAll()
+
+    if (!jobListings) {
+      throw new NotFoundException('Job listing not found')
+    }
+
+    const matchedIds = await this.jobMatchingAgentService.getMatchingJobListings(
+      query,
+      jobListings.map(listing => ({
+        ...listing,
+        wage: listing.wage != null ? Number(listing.wage) : null,
+      })),
+      { maxNumberOfJobs: 10 }
+    )
+
+    const matchedListings = jobListings.filter(listing => matchedIds.includes(listing.id))
+
+    if (!matchedListings) {
+      throw new NotFoundException('Job listing not found')
+    }
+
+    return matchedListings
   }
 }

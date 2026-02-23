@@ -5,9 +5,10 @@ import { CommonModule } from '@/common/common.module';
 import { PermissionsModule } from '@/permissions/permissions.module';
 import { InngestModule } from '@/inngest/inngest.module';
 import { S3Module } from '@/s3/s3.module';
+import { AgentsModule } from '@/agents/agents.module';
 
 @Module({
-  imports: [CommonModule, PermissionsModule, InngestModule, S3Module],
+  imports: [CommonModule, PermissionsModule, InngestModule, S3Module, AgentsModule],
   controllers: [JobListingsController],
   providers: [JobListingsService],
 })

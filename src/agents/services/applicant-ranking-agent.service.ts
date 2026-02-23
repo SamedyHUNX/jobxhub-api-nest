@@ -10,7 +10,7 @@ import Anthropic from '@anthropic-ai/sdk';
 export class ApplicantRankingAgentService {
     private anthropic: Anthropic;
 
-    constructor(private readonly dbUtilService: DatabaseUtilsService, private readonly configService: ConfigService) { }
+    constructor(private readonly dbUtilService: DatabaseUtilsService) { }
 
     private saveApplicantRatingTool = createTool({
         name: 'save-applicant-ranking',

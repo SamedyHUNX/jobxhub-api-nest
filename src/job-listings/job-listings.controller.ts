@@ -263,4 +263,21 @@ export class JobListingsController {
       };
     }
   }
+
+  // Get Job Listing AI Search Results
+  @Post('/ai-search')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async getJobListingAISearchResults(
+    @CurrentUser() user: User,
+    @Body('query') query: string,
+  ) {
+    const jobListings = await this.jobListingsService.getJobListingAISearchResults(user.id, query);
+
+    return {
+      message: 'Job listing AI search results fetched successfully',
+      data: jobListings,
+      statusCode: 200,
+    };
+  }
 }

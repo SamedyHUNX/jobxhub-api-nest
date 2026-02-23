@@ -3,7 +3,7 @@ import { InngestHealthService } from "../inngest-health.service";
 import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 import { ConfigService } from "@/common/services/config.service";
 import Anthropic from "@anthropic-ai/sdk";
-import { ApplicantRankingAgentService } from "../agents/ApplicantRankingAgentService";
+import { ApplicantRankingAgentService } from "../../../agents/services/applicant-ranking-agent.service";
 
 @Injectable()
 export class AiFunctions implements OnModuleInit {
