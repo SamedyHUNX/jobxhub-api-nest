@@ -16,6 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ImageValidationPipe } from '@/utils/image-validation-pipe';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { User } from '@/types';
+import { UpdateNotificationSettingsDto } from './dtos/update-notification-settings.dto';
 
 @Controller('users')
 export class UsersController {
@@ -80,6 +81,38 @@ export class UsersController {
       statusCode: 404,
       message: 'Failed to update user',
       data: []
+    }
+  }
+
+  // Get user notification settings
+  @ApiOperation({ summary: 'Get user notification settings' })
+  @ApiResponse({ status: 200, description: 'Get user notification settings' })
+  @Get('/me/notification-settings')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(ClassSerializerInterceptor)
+  async getNotificationSettings(@CurrentUser() user: User) {
+    const notificationSettings = await this.usersService.getNotificationSettings(user);
+
+    return {
+      statusCode: 200,
+      message: 'Get notification settings successfully',
+      data: [notificationSettings]
+    }
+  }
+
+  // Update notification settings
+  @ApiOperation({ summary: 'Update notification settings' })
+  @ApiResponse({ status: 200, description: 'Update notification settings' })
+  @Put('/me/notification-settings')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(ClassSerializerInterceptor)
+  async updateNotificationSettings(@CurrentUser() user: User, @Body() updateNotificationSettingsDto: UpdateNotificationSettingsDto) {
+    const notificationSettings = await this.usersService.updateNotificationSettings(user);
+
+    return {
+      statusCode: 200,
+      message: 'Update notification settings successfully',
+      data: [notificationSettings]
     }
   }
 }

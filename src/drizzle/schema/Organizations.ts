@@ -1,4 +1,4 @@
-import { createdAtCol, idCol, updatedAtCol } from '@/utils/helpers';
+import { createdAtCol, idCol, updatedAtCol } from '@/utils/date.utils';
 import { relations } from 'drizzle-orm';
 import { integer } from 'drizzle-orm/pg-core';
 import { boolean } from 'drizzle-orm/pg-core';

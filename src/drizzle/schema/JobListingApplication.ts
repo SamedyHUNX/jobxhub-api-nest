@@ -4,7 +4,7 @@ import { UserTable } from './User';
 import { text } from 'drizzle-orm/pg-core';
 import { integer } from 'drizzle-orm/pg-core';
 import { applicationStageEnum } from '@/types/enum';
-import { createdAtCol, updatedAtCol } from '@/utils/helpers';
+import { createdAtCol, updatedAtCol } from '@/utils/date.utils';
 import { primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 

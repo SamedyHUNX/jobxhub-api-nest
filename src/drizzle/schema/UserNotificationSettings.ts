@@ -3,7 +3,7 @@ import { pgTable } from 'drizzle-orm/pg-core';
 import { UserTable } from './User';
 import { boolean } from 'drizzle-orm/pg-core';
 import { varchar } from 'drizzle-orm/pg-core';
-import { createdAtCol, updatedAtCol } from '@/utils/helpers';
+import { createdAtCol, updatedAtCol } from '@/utils/date.utils';
 import { relations } from 'drizzle-orm';
 
 export const UserNotificationSettingsTable = pgTable(

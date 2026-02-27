@@ -5,7 +5,7 @@ import { OrganizationTable } from './Organizations';
 import { varchar } from 'drizzle-orm/pg-core';
 import { boolean } from 'drizzle-orm/pg-core';
 import { integer } from 'drizzle-orm/pg-core';
-import { createdAtCol, updatedAtCol } from '@/utils/helpers';
+import { createdAtCol, updatedAtCol } from '@/utils/date.utils';
 import { primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 

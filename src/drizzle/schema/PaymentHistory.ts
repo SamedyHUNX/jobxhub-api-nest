@@ -1,7 +1,7 @@
 import { pgTable, uuid, varchar, timestamp, integer, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { UserTable } from "./User";
 import { UserSubscriptionsTable } from "./UserSubscriptions";
-import { createdAtCol, idCol, updatedAtCol } from "@/utils/helpers";
+import { createdAtCol, idCol, updatedAtCol } from "@/utils/date.utils";
 
 export const PaymentHistoryTable = pgTable('payment_history', {
     id: idCol(),

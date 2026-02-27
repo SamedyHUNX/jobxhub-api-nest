@@ -20,7 +20,7 @@ async function bootstrap() {
 
   // API Documentation
   const config = new DocumentBuilder()
-    .setTitle('JobXHub API')
+    .setTitle("JobXHub's API")
     .setDescription('API description')
     .setVersion('1.0')
     .addBearerAuth()

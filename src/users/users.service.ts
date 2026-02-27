@@ -8,13 +8,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { UpdatedMeDataDto } from './dtos/update-me.dto';
-import { UserTable } from '@/drizzle/schema';
+import { UserNotificationSettingsTable, UserTable } from '@/drizzle/schema';
 import { and, eq, not } from 'drizzle-orm';
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { UserCacheService } from '@/cache/services/user-cache.service';
 import { Permissions } from '@/permissions/utils/app-permissions';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import type { User } from '@/types';
+import { UpdateNotificationSettingsDto } from './dtos/update-notification-settings.dto';
 
 @Injectable()
 export class UsersService {
@@ -191,5 +192,41 @@ export class UsersService {
       this.logger.error(`Failed to update user ${user.id}:`, error);
       throw error;
     }
+  };
+
+  getNotificationSettings = async (user: User) => {
+    const [notificationSettings] = await this.dbService.db
+      .select({
+        aiPrompt: UserNotificationSettingsTable.aiPrompt,
+        newJobEmailNotification: UserNotificationSettingsTable.newJobEmailNotifications,
+      })
+      .from(UserNotificationSettingsTable)
+      .where(eq(UserNotificationSettingsTable.userId, user.id))
+
+    if (!notificationSettings) {
+      throw new NotFoundException('Notification settings not found');
+    }
+
+    return notificationSettings;
+  };
+
+  updateNotificationSettings = async (user: User, dto: UpdateNotificationSettingsDto) => {
+    const [notificationSettings] = await this.dbService.db
+      .update(UserNotificationSettingsTable)
+      .set({
+        aiPrompt: dto.aiPrompt,
+        newJobEmailNotifications: dto.newJobEmailNotifications,
+      })
+      .where(eq(UserNotificationSettingsTable.userId, user.id))
+      .returning({
+        aiPrompt: UserNotificationSettingsTable.aiPrompt,
+        newJobEmailNotification: UserNotificationSettingsTable.newJobEmailNotifications,
+      })
+
+    if (!notificationSettings) {
+      throw new NotFoundException('Notification settings not found');
+    }
+
+    return notificationSettings;
   };
 }

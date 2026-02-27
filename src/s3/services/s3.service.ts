@@ -15,7 +15,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
 import { ConfigService } from '@/common/services/config.service';
-import { getImageKey } from '@/utils/helpers';
+import { getImageKey } from '@/s3/utils/s3.utils';
 
 @Injectable()
 export class S3Service {

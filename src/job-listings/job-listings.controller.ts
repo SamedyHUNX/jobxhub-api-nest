@@ -24,6 +24,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import type { User } from '@/types';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ResumeValidationPipe } from '@/utils/image-validation-pipe';
 
 @ApiTags('job-listings')
 @Controller('job-listings')
@@ -43,9 +44,9 @@ export class JobListingsController {
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('locationRequirement') locationRequirement?: string,
-    @Query('experience') experience?: string,
+    @Query('experienceLevel') experienceLevel?: string,
     @Query('city') city?: string,
-    @Query('state') state?: string,
+    @Query('stateAbbreviation') stateAbbreviation?: string,
     @Query('jobIds') jobIds?: string | string[],
   ) {
     const jobListings = await this.jobListingsService.findAll(
@@ -55,9 +56,9 @@ export class JobListingsController {
       status,
       type,
       locationRequirement,
-      experience,
+      experienceLevel,
       city,
-      state,
+      stateAbbreviation,
       jobIds
     );
 
@@ -212,12 +213,7 @@ export class JobListingsController {
   async uploadResume(
     @CurrentUser() user: User,
     @UploadedFile(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
-          new FileTypeValidator({ fileType: 'application/pdf' }),
-        ],
-      }),
+      new ResumeValidationPipe()
     )
     file: Express.Multer.File,
   ) {

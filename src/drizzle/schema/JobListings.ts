@@ -1,4 +1,4 @@
-import { createdAtCol, idCol, updatedAtCol } from '@/utils/helpers';
+import { createdAtCol, idCol, updatedAtCol } from '@/utils/date.utils';
 import { numeric, uuid, pgTable, varchar, boolean, timestamp, text } from 'drizzle-orm/pg-core';
 import { OrganizationTable } from './Organizations';
 import {

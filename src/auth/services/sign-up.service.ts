@@ -8,10 +8,10 @@ import { BadRequestException, ConflictException, Injectable, InternalServerError
 import { SignUpDto } from "../dto/auth.dto";
 import { UserTable } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { capitalizeString } from "@/utils/helpers";
 import * as Sentry from '@sentry/node';
 import type { User } from "@/types";
 import { DatabaseUtilsService } from "@/common/services/database-utils.service";
+import { capitalizeString } from "@/utils/string.utils";
 
 @Injectable() export class SignUpService {
     private logger = new Logger(SignUpService.name)

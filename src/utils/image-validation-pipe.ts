@@ -30,3 +30,24 @@ export class ImageValidationPipe implements PipeTransform {
     return file;
   }
 }
+
+@Injectable()
+export class ResumeValidationPipe implements PipeTransform {
+  transform(file: Express.Multer.File) {
+    if (!file) {
+      return file;
+    }
+
+    // Check file type
+    if (!file.mimetype.match(/\/(pdf)$/)) {
+      throw new BadRequestException('Invalid file type');
+    }
+
+    // Check file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      throw new BadRequestException('File size is too big');
+    }
+
+    return file;
+  }
+}

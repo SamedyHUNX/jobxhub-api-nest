@@ -77,9 +77,9 @@ export class JobListingsService {
     status?: string,
     type?: string,
     locationRequirement?: string,
-    experience?: string,
+    experienceLevel?: string,
     city?: string,
-    state?: string,
+    stateAbbreviation?: string,
     jobIds?: string | string[]) => {
     // Build conditions array
     const conditions: SQL[] = [];
@@ -111,9 +111,9 @@ export class JobListingsService {
         eq(JobListingTable.locationRequirement, locationRequirement as any),
       );
     }
-    if (experience) {
+    if (experienceLevel) {
       conditions.push(
-        eq(JobListingTable.experienceLevel, experience as any),
+        eq(JobListingTable.experienceLevel, experienceLevel as any),
       );
     }
 
@@ -121,8 +121,8 @@ export class JobListingsService {
       conditions.push(eq(JobListingTable.city, city));
     }
 
-    if (state) {
-      conditions.push(eq(JobListingTable.stateAbbreviation, state));
+    if (stateAbbreviation) {
+      conditions.push(eq(JobListingTable.stateAbbreviation, stateAbbreviation));
     }
 
     if (jobIds && jobIds.length > 0) {

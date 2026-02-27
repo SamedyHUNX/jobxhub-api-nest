@@ -5,7 +5,7 @@ import {
   integer,
   boolean,
 } from 'drizzle-orm/pg-core';
-import { createdAtCol, idCol, updatedAtCol } from '@/utils/helpers';
+import { createdAtCol, idCol, updatedAtCol } from '@/utils/date.utils';
 import { relations } from 'drizzle-orm';
 import { UserNotificationSettingsTable } from './UserNotificationSettings';
 import { UserResumeTable } from './UserResume';
