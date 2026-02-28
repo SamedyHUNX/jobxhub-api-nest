@@ -33,6 +33,9 @@ export class EmailFunctions implements OnModuleInit {
                     }),
                 ]);
 
+                console.log('userNotifications', userNotifications)
+                console.log('jobListings', jobListings)
+
                 if (!jobListings?.length || !userNotifications?.length) {
                     this.logger.log('No users or job listings found, skipping daily notifications');
                     return { skipped: true };
@@ -77,7 +80,9 @@ export class EmailFunctions implements OnModuleInit {
                 if (aiPrompt === null || aiPrompt.trim() === "") {
                     matchingJobListings = jobListings
                 } else {
-                    const matchingIds = await this.jobMatchingAgentService.getMatchingJobListings(aiPrompt, jobListings);
+                    const matchingIds = await step.run('match-job-listings-with-ai', async () => {
+                        return await this.jobMatchingAgentService.getMatchingJobListings(aiPrompt, jobListings);
+                    });
                     matchingJobListings = jobListings.filter((listing) => matchingIds.includes(listing.id));
                 }
 

@@ -212,16 +212,24 @@ export class UsersService {
 
   updateNotificationSettings = async (user: User, dto: UpdateNotificationSettingsDto) => {
     const [notificationSettings] = await this.dbService.db
-      .update(UserNotificationSettingsTable)
-      .set({
+      .insert(UserNotificationSettingsTable)
+      .values({
+        userId: user.id,
         aiPrompt: dto.aiPrompt,
         newJobEmailNotifications: dto.newJobEmailNotifications,
       })
-      .where(eq(UserNotificationSettingsTable.userId, user.id))
+      .onConflictDoUpdate({
+        target: UserNotificationSettingsTable.userId,
+        set: {
+          aiPrompt: dto.aiPrompt,
+          newJobEmailNotifications: dto.newJobEmailNotifications,
+        },
+      })
       .returning({
         aiPrompt: UserNotificationSettingsTable.aiPrompt,
-        newJobEmailNotification: UserNotificationSettingsTable.newJobEmailNotifications,
-      })
+        newJobEmailNotifications: UserNotificationSettingsTable.newJobEmailNotifications,
+      });
+
 
     if (!notificationSettings) {
       throw new NotFoundException('Notification settings not found');

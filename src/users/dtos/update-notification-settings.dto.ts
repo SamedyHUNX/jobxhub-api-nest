@@ -1,4 +1,11 @@
+import { IsBoolean, IsOptional, IsString } from "class-validator";
+
 export class UpdateNotificationSettingsDto {
-    newJobEmailNotifications: boolean;
-    aiPrompt: string | null;
+    @IsBoolean()
+    @IsOptional()
+    newJobEmailNotifications?: boolean;
+
+    @IsString()
+    @IsOptional()
+    aiPrompt?: string | null;
 }

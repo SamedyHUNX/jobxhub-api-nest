@@ -3,6 +3,7 @@ import {
   ClassSerializerInterceptor,
   Controller,
   Get,
+  Patch,
   Put,
   UploadedFile,
   UseGuards,
@@ -103,10 +104,11 @@ export class UsersController {
   // Update notification settings
   @ApiOperation({ summary: 'Update notification settings' })
   @ApiResponse({ status: 200, description: 'Update notification settings' })
-  @Put('/me/notification-settings')
+  @Patch('/me/notification-settings')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   async updateNotificationSettings(@CurrentUser() user: User, @Body() updateNotificationSettingsDto: UpdateNotificationSettingsDto) {
+    console.log('data received', updateNotificationSettingsDto)
     const notificationSettings = await this.usersService.updateNotificationSettings(user, updateNotificationSettingsDto);
 
     return {
