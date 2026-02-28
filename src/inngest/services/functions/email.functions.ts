@@ -8,6 +8,7 @@ import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 export class EmailFunctions implements OnModuleInit {
     private readonly logger = new Logger(EmailFunctions.name);
     private prepareDailyUserJobListingNotifications;
+    private sendDailyJobListingEmailToUser;
 
     constructor(
         private readonly inngestService: InngestHealthService,
@@ -35,57 +36,73 @@ export class EmailFunctions implements OnModuleInit {
                     return { skipped: true };
                 }
 
-                // Step 2: Send an email for each user
-                await step.run('send-daily-notifications', async () => {
-                    const results = await Promise.allSettled(
-                        userNotifications.map(async (notification) => {
-                            const { userId, userEmail, userFirstName, userLastName, aiPrompt } = notification;
+                // Step 2: Fan out! Send an event for each user to be processed in parallel
+                await step.sendEvent(
+                    'dispatch-daily-emails',
+                    userNotifications.map((notification) => ({
+                        name: 'jobxhub/email.send-daily-job-listing',
+                        data: {
+                            userId: notification.userId,
+                            userEmail: notification.userEmail,
+                            userFirstName: notification.userFirstName,
+                            userLastName: notification.userLastName,
+                            aiPrompt: notification.aiPrompt,
+                            jobListings,
+                        },
+                    })),
+                );
 
-                            try {
-                                this.logger.log(`Sending daily job listing notification to userId: ${userId} (${userEmail})`);
-
-                                await this.emailService.sendDailyJobListingEmail({
-                                    to: userEmail,
-                                    firstName: userFirstName,
-                                    lastName: userLastName,
-                                    jobListings,
-                                    aiPrompt,
-                                });
-
-                                this.logger.log(`Daily notification sent successfully to userId: ${userId}`);
-                                return { userId, emailSent: true };
-                            } catch (error: any) {
-                                this.logger.error(
-                                    `Failed to send daily notification to userId: ${userId}`,
-                                    error?.stack || error,
-                                );
-                                Sentry.captureException(error, {
-                                    tags: {
-                                        operation: 'inngest_daily_user_job_listing_notifications',
-                                        function: 'send-daily-notifications',
-                                    },
-                                    extra: {
-                                        userId,
-                                        userEmail,
-                                        errorMessage: error?.message,
-                                    },
-                                });
-                                return { userId, emailSent: false, error: error?.message };
-                            }
-                        }),
-                    );
-
-                    const succeeded = results.filter((r) => r.status === 'fulfilled' && (r.value as any).emailSent).length;
-                    const failed = results.length - succeeded;
-
-                    this.logger.log(`Daily notifications complete. Sent: ${succeeded}, Failed: ${failed}`);
-                    return { total: results.length, succeeded, failed };
-                });
+                this.logger.log(`Dispatched ${userNotifications.length} daily job listing emails.`);
+                return { dispatched: userNotifications.length };
             },
+        );
+
+        this.sendDailyJobListingEmailToUser = this.inngestService.getInngest().createFunction(
+            { id: 'jobxhub/email.send-daily-job-listing', name: 'JobXHub - Send Daily Job Listing Email To User' },
+            { event: 'jobxhub/email.send-daily-job-listing' },
+            async ({ event, step }) => {
+                const { userId, userEmail, userFirstName, userLastName, aiPrompt, jobListings } = event.data;
+
+                try {
+                    await step.run('send-daily-notification', async () => {
+                        this.logger.log(`Sending daily job listing notification to userId: ${userId} (${userEmail})`);
+
+                        await this.emailService.sendDailyJobListingEmail({
+                            to: userEmail,
+                            firstName: userFirstName,
+                            lastName: userLastName,
+                            jobListings,
+                            aiPrompt,
+                        });
+
+                        this.logger.log(`Daily notification sent successfully to userId: ${userId}`);
+                        return { emailSent: true };
+                    });
+
+                    return { success: true, userId };
+                } catch (error: any) {
+                    this.logger.error(
+                        `Failed to send daily notification to userId: ${userId}`,
+                        error?.stack || error,
+                    );
+                    Sentry.captureException(error, {
+                        tags: {
+                            operation: 'inngest_send_daily_job_listing_email',
+                            function: 'send-daily-notification',
+                        },
+                        extra: {
+                            userId,
+                            userEmail,
+                            errorMessage: error?.message,
+                        },
+                    });
+                    throw error; // Throw so that Inngest specifically retries this run
+                }
+            }
         );
     }
 
     getFunctions() {
-        return [this.prepareDailyUserJobListingNotifications];
+        return [this.prepareDailyUserJobListingNotifications, this.sendDailyJobListingEmailToUser];
     }
 }

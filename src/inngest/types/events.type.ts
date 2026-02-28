@@ -73,19 +73,16 @@ export type Events = {
     }
   };
   'jobxhub/email.daily-user-job-listings': {
+    data: Record<string, never>;
+  };
+  'jobxhub/email.send-daily-job-listing': {
     data: {
-      aiPrompt?: string;
-      jobListings: (
-        Omit<typeof JobListingTable.$inferSelect, 'createdAt' | 'updatedAt' | 'postedAt' | 'status' | 'organizationId'> & {
-          organizationName: string;
-        }
-      )[]
-    },
-    user: {
-      email: string;
-      username: string;
-      firstName: string;
-      lastName: string;
-    }
+      userId: string;
+      userEmail: string;
+      userFirstName: string;
+      userLastName: string;
+      aiPrompt?: string | null;
+      jobListings: { id: string; title: string; organizationName: string }[];
+    };
   }
 };
