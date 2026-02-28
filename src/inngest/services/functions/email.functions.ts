@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/node';
 import { EmailService } from "@/common/services/email.service";
 import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 import { JobMatchingAgentService } from "@/agents/services/job-matching-agent.service";
+import type { JobListing } from "@/types";
 
 @Injectable()
 export class EmailFunctions implements OnModuleInit {
@@ -20,8 +21,8 @@ export class EmailFunctions implements OnModuleInit {
 
     onModuleInit() {
         this.prepareDailyUserJobListingNotifications = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/email.daily-user-job-listings', name: 'JobXHub - Email Daily User Job Listing Notifications' },
-            { event: 'jobxhub/email.daily-user-job-listings' },
+            { id: 'jobxhub/email.prepare-daily-user-job-listings', name: 'JobXHub - Prepare Daily User Job Listing Notifications' },
+            { event: 'jobxhub/email.prepare-daily-user-job-listings' },
             async ({ event, step }) => {
                 // Step 1: Fetch users with email notifications enabled and recent job listings in parallel
                 const [userNotifications, jobListings] = await Promise.all([
@@ -32,9 +33,6 @@ export class EmailFunctions implements OnModuleInit {
                         return await this.dbUtilsService.getRecentJobListings();
                     }),
                 ]);
-
-                console.log('userNotifications', userNotifications)
-                console.log('jobListings', jobListings)
 
                 if (!jobListings?.length || !userNotifications?.length) {
                     this.logger.log('No users or job listings found, skipping daily notifications');
@@ -55,7 +53,7 @@ export class EmailFunctions implements OnModuleInit {
                             jobListings,
                         },
                     })),
-                );
+                ); // TODO
 
                 this.logger.log(`Dispatched ${userNotifications.length} daily job listing emails.`);
                 return { dispatched: userNotifications.length };
@@ -80,10 +78,8 @@ export class EmailFunctions implements OnModuleInit {
                 if (aiPrompt === null || aiPrompt.trim() === "") {
                     matchingJobListings = jobListings
                 } else {
-                    const matchingIds = await step.run('match-job-listings-with-ai', async () => {
-                        return await this.jobMatchingAgentService.getMatchingJobListings(aiPrompt, jobListings);
-                    });
-                    matchingJobListings = jobListings.filter((listing) => matchingIds.includes(listing.id));
+                    const matchingIds = await this.jobMatchingAgentService.getMatchingJobListings(aiPrompt, jobListings);
+                    matchingJobListings = jobListings.filter((listing: JobListing) => matchingIds.includes(listing.id));
                 }
 
                 if (matchingJobListings.length === 0) return { skipped: true };

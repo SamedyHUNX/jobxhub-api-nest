@@ -72,7 +72,7 @@ export type Events = {
       userId: string;
     }
   };
-  'jobxhub/email.daily-user-job-listings': {
+  'jobxhub/email.prepare-daily-user-job-listings': {
     data: Record<string, never>;
   };
   'jobxhub/email.send-daily-job-listing': {

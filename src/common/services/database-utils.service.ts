@@ -252,7 +252,15 @@ export class DatabaseUtilsService {
                 title: JobListingTable.title,
                 status: JobListingTable.status,
                 createdAt: JobListingTable.createdAt,
-                organizationName: OrganizationTable.orgName
+                organizationName: OrganizationTable.orgName,
+                description: JobListingTable.description,
+                wage: JobListingTable.wage,
+                wageInterval: JobListingTable.wageInterval,
+                city: JobListingTable.city,
+                stateAbbreviation: JobListingTable.stateAbbreviation,
+                experienceLevel: JobListingTable.experienceLevel,
+                type: JobListingTable.type,
+                locationRequirement: JobListingTable.locationRequirement,
             })
             .from(JobListingTable)
             .innerJoin(
