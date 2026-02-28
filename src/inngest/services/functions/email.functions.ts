@@ -91,7 +91,7 @@ export class EmailFunctions implements OnModuleInit {
                             to: userEmail,
                             firstName: userFirstName,
                             lastName: userLastName,
-                            jobListings,
+                            jobListings: matchingJobListings,
                             aiPrompt,
                         });
 
