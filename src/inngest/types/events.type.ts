@@ -1,3 +1,5 @@
+import { JobListingTable } from "@/drizzle/schema";
+
 export type UserCreatedData = {
   userId: string;
   email: string;
@@ -68,6 +70,22 @@ export type Events = {
   'jobxhub/resume.uploaded': {
     data: {
       userId: string;
+    }
+  };
+  'jobxhub/email.daily-user-job-listings': {
+    data: {
+      aiPrompt?: string;
+      jobListings: (
+        Omit<typeof JobListingTable.$inferSelect, 'createdAt' | 'updatedAt' | 'postedAt' | 'status' | 'organizationId'> & {
+          organizationName: string;
+        }
+      )[]
+    },
+    user: {
+      email: string;
+      username: string;
+      firstName: string;
+      lastName: string;
     }
   }
 };

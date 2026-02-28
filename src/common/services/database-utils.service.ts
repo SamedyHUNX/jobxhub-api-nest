@@ -1,7 +1,7 @@
-import { JobListingApplicationTable, JobListingTable, OrganizationTable, OrganizationUserSettingsTable, UserResumeTable, UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
+import { JobListingApplicationTable, JobListingTable, OrganizationTable, OrganizationUserSettingsTable, UserNotificationSettingsTable, UserResumeTable, UserSubscriptionsTable, UserTable } from "@/drizzle/schema";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { and, eq, or } from "drizzle-orm";
+import { and, desc, eq, gte, or } from "drizzle-orm";
 
 @Injectable()
 export class DatabaseUtilsService {
@@ -224,4 +224,46 @@ export class DatabaseUtilsService {
 
         return application;
     };
+
+    // Get users with notification settings
+    getUsersWithNotificationSettings = async () => {
+        const users = await this.dbService.getDb()
+            .select({
+                userId: UserNotificationSettingsTable.userId,
+                newJobEmailNotifications: UserNotificationSettingsTable.newJobEmailNotifications,
+                aiPrompt: UserNotificationSettingsTable.aiPrompt,
+                userEmail: UserTable.email,
+                userFirstName: UserTable.firstName,
+                userLastName: UserTable.lastName,
+            })
+            .from(UserNotificationSettingsTable)
+            .innerJoin(UserTable, eq(UserNotificationSettingsTable.userId, UserTable.id))
+            .where(eq(UserNotificationSettingsTable.newJobEmailNotifications, true));
+
+
+        return users;
+    }
+
+    // Get recent job listings
+    getRecentJobListings = async () => {
+        const jobListings = await this.dbService.getDb()
+            .select({
+                id: JobListingTable.id,
+                title: JobListingTable.title,
+                status: JobListingTable.status,
+                createdAt: JobListingTable.createdAt,
+                organizationName: OrganizationTable.orgName
+            })
+            .from(JobListingTable)
+            .innerJoin(
+                OrganizationTable,
+                eq(JobListingTable.organizationId, OrganizationTable.id)
+            )
+            .where(eq(JobListingTable.status, 'published'))
+            .orderBy(desc(JobListingTable.createdAt))
+            .limit(10);
+
+        return jobListings;
+    }
+
 }

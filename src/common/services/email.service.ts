@@ -331,6 +331,69 @@ export class EmailService {
     }
   }
 
+  async sendDailyJobListingEmail(params: {
+    to: string;
+    firstName: string;
+    lastName: string;
+    jobListings: { id: string; title: string; organizationName: string; city?: string; stateAbbreviation?: string }[];
+    aiPrompt?: string | null;
+  }) {
+    const { to, firstName, lastName, jobListings, aiPrompt } = params;
+    const greeting = firstName ? `Hi ${firstName} ${lastName}` : 'Hi there';
+
+    const jobListingsHtml = jobListings
+      .map(
+        (job) => `
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #eee;">
+              <strong style="color: #333;">${job.title}</strong><br>
+              <span style="color: #666; font-size: 13px;">${job.organizationName}</span>
+              ${job.city || job.stateAbbreviation ? `<br><span style="color: #999; font-size: 12px;">${[job.city, job.stateAbbreviation].filter(Boolean).join(', ')}</span>` : ''}
+            </td>
+          </tr>`,
+      )
+      .join('');
+
+    const aiPromptNote = aiPrompt
+      ? `<p style="color: #555; font-size: 13px; font-style: italic;">Your custom search preference: <em>${aiPrompt}</em></p>`
+      : '';
+
+    const mailOptions = {
+      from: this.configService.emailFrom,
+      to,
+      subject: `🔔 ${jobListings.length} New Job${jobListings.length > 1 ? 's' : ''} Matching Your Preferences`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #333;">Daily Job Digest</h1>
+          <p>${greeting},</p>
+          <p>Here are the latest job listings you might be interested in:</p>
+          ${aiPromptNote}
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            ${jobListingsHtml}
+          </table>
+          <p style="color: #666; font-size: 12px;">
+            You're receiving this because you have daily job notifications enabled.
+            You can update your notification preferences in your account settings.
+          </p>
+        </div>
+      `,
+    };
+
+    try {
+      this.logger.log(`Sending daily job listing email to: ${to}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Daily job listing email sent successfully to: ${to}. MessageId: ${result.messageId}`);
+      return result;
+    } catch (error: any) {
+      this.logger.error(`Failed to send daily job listing email to: ${to}`, error?.stack || error);
+      Sentry.captureException(error, {
+        tags: { operation: 'send_daily_job_listing_email' },
+        extra: { to, errorMessage: error?.message },
+      });
+      throw error;
+    }
+  }
+
   /**
    * Test method to verify email service is working
    * This can be called to diagnose email sending issues

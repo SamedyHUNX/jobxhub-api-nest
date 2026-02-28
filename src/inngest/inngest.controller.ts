@@ -3,6 +3,7 @@ import { serve } from 'inngest/express';
 import { InngestHealthService } from './services/inngest-health.service';
 import { AuthFunctions } from './services/functions/auth.functions';
 import { AiFunctions } from './services/functions/ai.functions';
+import { EmailFunctions } from './services/functions/email.functions';
 
 @Controller('inngest')
 export class InngestController {
@@ -13,6 +14,7 @@ export class InngestController {
     private readonly inngestService: InngestHealthService,
     private readonly authFunctions: AuthFunctions,
     private readonly aiFunctions: AiFunctions,
+    private readonly emailFunctions: EmailFunctions,
   ) { }
 
   @All()
@@ -20,7 +22,7 @@ export class InngestController {
     if (!this.handler) {
       this.handler = serve({
         client: this.inngestService.getInngest(),
-        functions: [...this.authFunctions.getFunctions(), ...this.aiFunctions.getFunctions()],
+        functions: [...this.authFunctions.getFunctions(), ...this.aiFunctions.getFunctions(), ...this.emailFunctions.getFunctions()],
       });
       this.logger.log('Inngest handler initialized');
     }
