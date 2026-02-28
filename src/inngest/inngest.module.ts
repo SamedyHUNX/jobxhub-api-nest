@@ -6,6 +6,7 @@ import { InngestClientService } from './services/inngest-client.service';
 import { AuthFunctions } from './services/functions/auth.functions';
 import { AiFunctions } from './services/functions/ai.functions';
 import { AgentsModule } from '@/agents/agents.module';
+import { EmailFunctions } from './services/functions/email.functions';
 @Module({
   imports: [CommonModule, AgentsModule],
   controllers: [InngestController],
@@ -14,6 +15,7 @@ import { AgentsModule } from '@/agents/agents.module';
     InngestClientService,
     AuthFunctions,
     AiFunctions,
+    EmailFunctions,
   ],
   exports: [InngestHealthService, InngestClientService],
 })
