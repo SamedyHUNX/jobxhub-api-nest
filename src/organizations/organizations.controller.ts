@@ -20,7 +20,7 @@ import { MulterExceptionFilter } from '@/utils/multer-global-handling';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { IdValidationPipe, ImageValidationPipe } from '@/utils/image-validation-pipe';
+import { IdValidationPipe, ImageValidationPipe } from '@/utils/pipes/image-validation-pipe';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
 import type { User } from '@/types';
 import { UpdateOrganizationDto } from './dtos/update-organization.dto';

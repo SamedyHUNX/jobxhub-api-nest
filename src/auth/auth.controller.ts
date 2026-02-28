@@ -20,7 +20,7 @@ import {
   SignInDto,
   SignUpDto,
 } from './dto/auth.dto';
-import { ImageValidationPipe } from '@/utils/image-validation-pipe';
+import { ImageValidationPipe } from '@/utils/pipes/image-validation-pipe';
 import { JwtAuthGuard } from './jwt/jwt.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { plainToInstance } from 'class-transformer';
@@ -189,13 +189,13 @@ export class AuthController {
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(
-    @Body() { token, newPassword, confirmNewPassword }: ResetPasswordDto,
+    @Body() { token, newPassword, confirmPassword }: ResetPasswordDto,
     @Res() res: Response,
   ) {
     const success = this.resetPasswordService.resetPassword(
       token,
       newPassword,
-      confirmNewPassword,
+      confirmPassword,
     );
     if (!success) {
       return res.json({

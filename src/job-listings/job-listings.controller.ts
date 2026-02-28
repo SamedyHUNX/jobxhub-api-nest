@@ -24,7 +24,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import type { User } from '@/types';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ResumeValidationPipe } from '@/utils/image-validation-pipe';
+import { ResumeValidationPipe } from '@/utils/pipes/image-validation-pipe';
 
 @ApiTags('job-listings')
 @Controller('job-listings')

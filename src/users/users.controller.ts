@@ -14,7 +14,7 @@ import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { UpdatedMeDataDto } from './dtos/update-me.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ImageValidationPipe } from '@/utils/image-validation-pipe';
+import { ImageValidationPipe } from '@/utils/pipes/image-validation-pipe';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { User } from '@/types';
 import { UpdateNotificationSettingsDto } from './dtos/update-notification-settings.dto';

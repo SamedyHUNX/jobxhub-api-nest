@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { InngestHealthService } from "../inngest-health.service";
 import * as Sentry from '@sentry/node';
-import { EmailService } from "@/common/services/email.service";
+import { EmailService } from "@/email/services/email.service";
 import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 import { JobMatchingAgentService } from "@/agents/services/job-matching-agent.service";
 import type { JobListing } from "@/types";
@@ -96,14 +96,14 @@ export class EmailFunctions implements OnModuleInit {
                             aiPrompt,
                         });
 
-                        this.logger.log(`Daily email sent successfully to userId: ${userId}`);
+                        this.logger.log(`Daily email sent successfully to userId: ${userId} `);
                         return { emailSent: true };
                     });
 
                     return { success: true, userId };
                 } catch (error: any) {
                     this.logger.error(
-                        `Failed to send daily notification to userId: ${userId}`,
+                        `Failed to send daily notification to userId: ${userId} `,
                         error?.stack || error,
                     );
                     Sentry.captureException(error, {

@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { InngestHealthService } from "../inngest-health.service";
-import { EmailService } from "@/common/services/email.service";
+import { EmailService } from "@/email/services/email.service";
 import * as Sentry from '@sentry/node';
 
 @Injectable()
