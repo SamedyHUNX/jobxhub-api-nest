@@ -1,8 +1,10 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { InngestHealthService } from "../inngest-health.service";
 import * as Sentry from '@sentry/node';
-import { EmailService } from "@/common/services/email.service";
+import { EmailService } from "@/email/services/email.service";
 import { DatabaseUtilsService } from "@/common/services/database-utils.service";
+import { JobMatchingAgentService } from "@/agents/services/job-matching-agent.service";
+import type { JobListing } from "@/types";
 
 @Injectable()
 export class EmailFunctions implements OnModuleInit {
@@ -14,12 +16,13 @@ export class EmailFunctions implements OnModuleInit {
         private readonly inngestService: InngestHealthService,
         private readonly emailService: EmailService,
         private readonly dbUtilsService: DatabaseUtilsService,
+        private readonly jobMatchingAgentService: JobMatchingAgentService
     ) { }
 
     onModuleInit() {
         this.prepareDailyUserJobListingNotifications = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/email.daily-user-job-listings', name: 'JobXHub - Email Daily User Job Listing Notifications' },
-            { event: 'jobxhub/email.daily-user-job-listings' },
+            { id: 'jobxhub/email.prepare-daily-user-job-listings', name: 'JobXHub - Prepare Daily User Job Listing Notifications' },
+            { event: 'jobxhub/email.prepare-daily-user-job-listings' },
             async ({ event, step }) => {
                 // Step 1: Fetch users with email notifications enabled and recent job listings in parallel
                 const [userNotifications, jobListings] = await Promise.all([
@@ -50,7 +53,7 @@ export class EmailFunctions implements OnModuleInit {
                             jobListings,
                         },
                     })),
-                );
+                ); // TODO
 
                 this.logger.log(`Dispatched ${userNotifications.length} daily job listing emails.`);
                 return { dispatched: userNotifications.length };
@@ -58,31 +61,49 @@ export class EmailFunctions implements OnModuleInit {
         );
 
         this.sendDailyJobListingEmailToUser = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/email.send-daily-job-listing', name: 'JobXHub - Send Daily Job Listing Email To User' },
+            {
+                id: 'jobxhub/email.send-daily-job-listing', name: 'JobXHub - Send Daily Job Listing Email To User', throttle: {
+                    limit: 10,
+                    period: '1m'
+                }
+            },
             { event: 'jobxhub/email.send-daily-job-listing' },
             async ({ event, step }) => {
                 const { userId, userEmail, userFirstName, userLastName, aiPrompt, jobListings } = event.data;
 
+                if (!jobListings?.length) return { skipped: true };
+
+                let matchingJobListings: typeof jobListings = [];
+
+                if (aiPrompt === null || aiPrompt.trim() === "") {
+                    matchingJobListings = jobListings
+                } else {
+                    const matchingIds = await this.jobMatchingAgentService.getMatchingJobListings(aiPrompt, jobListings);
+                    matchingJobListings = jobListings.filter((listing: JobListing) => matchingIds.includes(listing.id));
+                }
+
+                if (matchingJobListings.length === 0) return { skipped: true };
+
                 try {
-                    await step.run('send-daily-notification', async () => {
+                    await step.run('send-daily-email', async () => {
                         this.logger.log(`Sending daily job listing notification to userId: ${userId} (${userEmail})`);
 
                         await this.emailService.sendDailyJobListingEmail({
                             to: userEmail,
                             firstName: userFirstName,
                             lastName: userLastName,
-                            jobListings,
+                            jobListings: matchingJobListings,
                             aiPrompt,
                         });
 
-                        this.logger.log(`Daily notification sent successfully to userId: ${userId}`);
+                        this.logger.log(`Daily email sent successfully to userId: ${userId} `);
                         return { emailSent: true };
                     });
 
                     return { success: true, userId };
                 } catch (error: any) {
                     this.logger.error(
-                        `Failed to send daily notification to userId: ${userId}`,
+                        `Failed to send daily notification to userId: ${userId} `,
                         error?.stack || error,
                     );
                     Sentry.captureException(error, {

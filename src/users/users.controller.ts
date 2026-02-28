@@ -3,6 +3,7 @@ import {
   ClassSerializerInterceptor,
   Controller,
   Get,
+  Patch,
   Put,
   UploadedFile,
   UseGuards,
@@ -13,7 +14,7 @@ import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { UpdatedMeDataDto } from './dtos/update-me.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ImageValidationPipe } from '@/utils/image-validation-pipe';
+import { ImageValidationPipe } from '@/utils/pipes/image-validation-pipe';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { User } from '@/types';
 import { UpdateNotificationSettingsDto } from './dtos/update-notification-settings.dto';
@@ -103,11 +104,12 @@ export class UsersController {
   // Update notification settings
   @ApiOperation({ summary: 'Update notification settings' })
   @ApiResponse({ status: 200, description: 'Update notification settings' })
-  @Put('/me/notification-settings')
+  @Patch('/me/notification-settings')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   async updateNotificationSettings(@CurrentUser() user: User, @Body() updateNotificationSettingsDto: UpdateNotificationSettingsDto) {
-    const notificationSettings = await this.usersService.updateNotificationSettings(user);
+    console.log('data received', updateNotificationSettingsDto)
+    const notificationSettings = await this.usersService.updateNotificationSettings(user, updateNotificationSettingsDto);
 
     return {
       statusCode: 200,

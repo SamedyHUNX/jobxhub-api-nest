@@ -9,8 +9,6 @@ import { MulterError } from 'multer';
 @Catch(MulterError)
 export class MulterExceptionFilter implements ExceptionFilter {
   catch(exception: MulterError, host: ArgumentsHost) {
-    const ctx = host.switchToHttp();
-    const response = ctx.getResponse();
 
     if (exception.code === 'LIMIT_FILE_SIZE') {
       throw new BadRequestException({
