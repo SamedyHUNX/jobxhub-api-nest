@@ -1,8 +1,6 @@
 import { HashingService } from "@/common/services/hashing.service";
 import { DrizzleHealthService } from "@/drizzle/services/drizzle-health.service";
 import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
-import { SignInDto } from "../dto/auth.dto";
-import type { User } from "@/types";
 import { ConfigService } from "@/common/services/config.service";
 import { RateLimitCacheService } from "@/cache/services/rate-limit-cache.service";
 import { UserTable } from "@/drizzle/schema";
@@ -13,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { CachedUser } from "@/cache/types/cache.types";
 import { DatabaseUtilsService } from "@/common/services/database-utils.service";
 import { SubscriptionPermissionsService } from "@/permissions/services/subscription-permissions.service";
+import { SignInDto } from "../dto/sign-in.dto";
 
 @Injectable()
 export class SignInService {

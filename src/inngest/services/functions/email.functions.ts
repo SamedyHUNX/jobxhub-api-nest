@@ -11,6 +11,7 @@ export class EmailFunctions implements OnModuleInit {
     private readonly logger = new Logger(EmailFunctions.name);
     private prepareDailyUserJobListingNotifications;
     private sendDailyJobListingEmailToUser;
+    private prepareDailyOrganizationUserApplicationNotifications;
 
     constructor(
         private readonly inngestService: InngestHealthService,
@@ -121,9 +122,68 @@ export class EmailFunctions implements OnModuleInit {
                 }
             }
         );
+
+        this.prepareDailyOrganizationUserApplicationNotifications = this.inngestService.getInngest().createFunction(
+            { id: 'jobxhub/prepare-daily-organization-user-application-notifications', name: 'JobXHub - Prepare Daily Organization User Application Notifications' },
+            { event: 'jobxhub/prepare-daily-organization-user-application-notifications' },
+            async ({ event, step }) => {
+                const { organizationId } = event.data;
+
+                const users = await this.dbUtilsService.getOrgUsersWithApplicationNotificationSettings(organizationId);
+
+                if (!users?.length) {
+                    this.logger.log('No users found, skipping daily notifications');
+                    return { skipped: true };
+                }
+
+                const applications = await this.dbUtilsService.getRecentApplications(organizationId);
+
+                if (!applications?.length) {
+                    this.logger.log('No applications found, skipping daily notifications');
+                    return { skipped: true };
+                }
+
+                const groupedNotifications = applications.reduce((acc, application) => {
+                    if (!acc[application.userId]) {
+                        acc[application.userId] = [];
+                    }
+                    acc[application.userId].push(application);
+                    return acc;
+                }, {});
+
+                const events = Object.entries(groupedNotifications).map(([userId, settings]) => {
+                    if (settings === null || !settings) return null;
+
+                    const userName = settings[0].user.name;
+                    const userEmail = settings[0].user.email;
+
+                    return {
+                        name: 'jobxhub/email.send-daily-application',
+                        data: {
+                            userId,
+                            userName,
+                            userEmail,
+                            applications,
+                        },
+                    };
+                });
+
+                await step.sendEvent(
+                    'dispatch-daily-emails',
+                    events,
+                );
+
+                this.logger.log(`Dispatched ${users.length} daily job listing emails.`);
+                return { dispatched: users.length };
+            }
+        )
     }
 
     getFunctions() {
-        return [this.prepareDailyUserJobListingNotifications, this.sendDailyJobListingEmailToUser];
+        return [
+            this.prepareDailyUserJobListingNotifications,
+            this.sendDailyJobListingEmailToUser,
+            this.prepareDailyOrganizationUserApplicationNotifications
+        ];
     }
 }
