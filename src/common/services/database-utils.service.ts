@@ -274,4 +274,24 @@ export class DatabaseUtilsService {
         return jobListings;
     }
 
+    createOrgUserSettings = async (userId: string, orgId: string) => {
+        await this.dbService.getDb()
+            .insert(OrganizationUserSettingsTable)
+            .values({
+                organizationId: orgId,
+                userId: userId,
+                role: 'MEMBER',
+            });
+    }
+
+    deleteOrgUserSettings = async (userId: string, orgId: string) => {
+        await this.dbService.getDb()
+            .delete(OrganizationUserSettingsTable)
+            .where(
+                and(
+                    eq(OrganizationUserSettingsTable.organizationId, orgId),
+                    eq(OrganizationUserSettingsTable.userId, userId)
+                )
+            );
+    }
 }

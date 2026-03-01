@@ -8,6 +8,7 @@ import { AiFunctions } from './services/functions/ai.functions';
 import { AgentsModule } from '@/agents/agents.module';
 import { EmailFunctions } from './services/functions/email.functions';
 import { EmailModule } from '@/email/email.module';
+import { MembershipFunctions } from './services/functions/membership.functions';
 @Module({
   imports: [CommonModule, AgentsModule, EmailModule],
   controllers: [InngestController],
@@ -17,6 +18,7 @@ import { EmailModule } from '@/email/email.module';
     AuthFunctions,
     AiFunctions,
     EmailFunctions,
+    MembershipFunctions,
   ],
   exports: [InngestHealthService, InngestClientService],
 })
