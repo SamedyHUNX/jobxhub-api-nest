@@ -3,7 +3,7 @@ import { ConflictException, ForbiddenException, Injectable, InternalServerErrorE
 import { CreateJobListingApplicationDto, CreateJobListingDto, UpdateJobListingDto } from '../dto/job-listings.dto';
 import { JobListingApplicationTable, JobListingTable, OrganizationTable, UserResumeTable, UserTable } from '@/drizzle/schema';
 import { and, desc, eq, like, or, count, SQL, inArray } from 'drizzle-orm';
-import type { JobListing, User } from '@/types';
+import type { ApplicationStage, JobListing, User } from '@/types';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import * as Sentry from '@sentry/nestjs';
 import { DatabaseUtilsService } from '@/common/services/database-utils.service';
@@ -333,6 +333,7 @@ export class JobListingsService {
         updatedAt: JobListingApplicationTable.updatedAt,
         jobListingId: JobListingApplicationTable.jobListingId,
         userId: JobListingApplicationTable.userId,
+        stage: JobListingApplicationTable.stage,
         id: JobListingApplicationTable.jobListingId,
         user: {
           id: UserTable.id,
@@ -478,5 +479,20 @@ export class JobListingsService {
     }
 
     return matchedListings
+  }
+
+  updateJobListingApplicationStage = async (userId: string, jobId: string, stage: ApplicationStage) => {
+    const existingApplication = await this.dbUtilsService.getJobListingApplication(userId, jobId)
+
+    if (!existingApplication) {
+      throw new NotFoundException('Job listing application not found')
+    }
+
+    await this.dbService.getDb()
+      .update(JobListingApplicationTable)
+      .set({ stage })
+      .where(and(eq(JobListingApplicationTable.userId, userId), eq(JobListingApplicationTable.jobListingId, jobId)))
+
+    return true
   }
 }

@@ -332,4 +332,14 @@ export class DatabaseUtilsService {
 
         return applications;
     }
+
+    getJobListingApplication = async (jobListingId: string, userId: string) => {
+        const [application] = await this.dbService.getDb()
+            .select()
+            .from(JobListingApplicationTable)
+            .where(and(eq(JobListingApplicationTable.jobListingId, jobListingId), eq(JobListingApplicationTable.userId, userId)))
+            .limit(1);
+
+        return application;
+    }
 }
