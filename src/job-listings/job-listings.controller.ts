@@ -163,7 +163,7 @@ export class JobListingsController {
     }
   }
 
-  // Get job listing application
+  // Get Own job listing application
   @Get('/application/:jobId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
@@ -179,6 +179,23 @@ export class JobListingsController {
     return {
       message: 'Job listing application fetched successfully',
       data: application,
+      statusCode: 200,
+    };
+  }
+
+  // Get all job listing application
+  @Get('/applications/:jobId')
+  @HttpCode(HttpStatus.OK)
+  async getAllJobListingApplicationForOrgId(
+    @Param('jobId') jobId: string,
+  ) {
+    const applications = await this.jobListingsService.getAllJobListingApplicationForOrgId(
+      jobId,
+    );
+
+    return {
+      message: 'Job listing applications fetched successfully',
+      data: applications,
       statusCode: 200,
     };
   }

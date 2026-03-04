@@ -200,7 +200,7 @@ export class EmailFunctions implements OnModuleInit {
                 id: 'jobxhub/email.send-daily-application',
                 name: 'JobXHub - Send Daily Application Email To User',
                 throttle: {
-                    limit: 10,
+                    limit: 1000,
                     period: '1m',
                 },
             },

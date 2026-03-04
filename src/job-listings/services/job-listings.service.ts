@@ -1,7 +1,7 @@
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { ConflictException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { CreateJobListingApplicationDto, CreateJobListingDto, UpdateJobListingDto } from '../dto/job-listings.dto';
-import { JobListingApplicationTable, JobListingTable, OrganizationTable, UserResumeTable } from '@/drizzle/schema';
+import { JobListingApplicationTable, JobListingTable, OrganizationTable, UserResumeTable, UserTable } from '@/drizzle/schema';
 import { and, desc, eq, like, or, count, SQL, inArray } from 'drizzle-orm';
 import type { JobListing, User } from '@/types';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
@@ -320,6 +320,38 @@ export class JobListingsService {
     const applications = await this.dbService.getDb()
       .select()
       .from(JobListingApplicationTable).where(and(eq(JobListingApplicationTable.jobListingId, jobId), eq(JobListingApplicationTable.userId, userId)))
+
+    return applications
+  }
+
+  // Get all job listing applications
+  getAllJobListingApplicationForOrgId = async (jobId: string) => {
+    const applications = await this.dbService.getDb()
+      .select({
+        coverLetter: JobListingApplicationTable.coverLetter,
+        createdAt: JobListingApplicationTable.createdAt,
+        updatedAt: JobListingApplicationTable.updatedAt,
+        jobListingId: JobListingApplicationTable.jobListingId,
+        userId: JobListingApplicationTable.userId,
+        id: JobListingApplicationTable.jobListingId,
+        user: {
+          id: UserTable.id,
+          username: UserTable.username,
+          imageUrl: UserTable.imageUrl,
+          firstName: UserTable.firstName,
+          lastName: UserTable.lastName,
+          email: UserTable.email,
+          phoneNumber: UserTable.phoneNumber,
+        },
+        resume: {
+          resumeFileUrl: UserResumeTable.resumeFileKey,
+          aiSummary: UserResumeTable.aiSummary
+        }
+      })
+      .from(JobListingApplicationTable)
+      .where(eq(JobListingApplicationTable.jobListingId, jobId))
+      .leftJoin(UserTable, eq(JobListingApplicationTable.userId, UserTable.id))
+      .leftJoin(UserResumeTable, eq(JobListingApplicationTable.userId, UserResumeTable.userId))
 
     return applications
   }
