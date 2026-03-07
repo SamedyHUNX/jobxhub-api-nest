@@ -11,6 +11,7 @@ import { InngestHealthService } from '@/inngest/services/inngest-health.service'
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { JobMatchingAgentService } from '@/agents/services/job-matching-agent.service';
 import { getLastOutputMessage } from '@/utils/agents';
+import console from 'console';
 
 @Injectable()
 export class JobListingsService {
@@ -482,7 +483,9 @@ export class JobListingsService {
   }
 
   updateJobListingApplicationStage = async (userId: string, jobId: string, stage: ApplicationStage) => {
+    console.log(userId, jobId, stage)
     const existingApplication = await this.dbUtilsService.getJobListingApplication(userId, jobId)
+    console.log(existingApplication)
 
     if (!existingApplication) {
       throw new NotFoundException('Job listing application not found')

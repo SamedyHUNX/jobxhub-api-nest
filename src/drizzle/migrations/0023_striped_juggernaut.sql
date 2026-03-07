@@ -1,0 +1,1 @@
+ALTER TYPE "public"."job_listing_applications_state" ADD VALUE 'interested' BEFORE 'interviewed';

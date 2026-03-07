@@ -298,10 +298,10 @@ export class JobListingsController {
   async updateJobListingApplicationStage(
     @Param('jobId') jobId: string,
     @Body('stage') stageValue: ApplicationStage,
-    @CurrentUser() user: User,
+    @Body('userId') userId: string,
   ) {
     const success = await this.jobListingsService.updateJobListingApplicationStage(
-      user.id,
+      userId,
       jobId,
       stageValue,
     );
