@@ -498,4 +498,19 @@ export class JobListingsService {
 
     return true
   }
+
+  updateJobListingApplicationRating = async (userId: string, jobId: string, rating: number) => {
+    const existingApplication = await this.dbUtilsService.getJobListingApplication(userId, jobId)
+
+    if (!existingApplication) {
+      throw new NotFoundException('Job listing application not found')
+    }
+
+    await this.dbService.getDb()
+      .update(JobListingApplicationTable)
+      .set({ rating })
+      .where(and(eq(JobListingApplicationTable.userId, userId), eq(JobListingApplicationTable.jobListingId, jobId)))
+
+    return true
+  }
 }

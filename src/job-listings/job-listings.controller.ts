@@ -314,4 +314,28 @@ export class JobListingsController {
       };
     }
   }
+
+  // Update job listing application rating
+  @Put('/application/:jobId/rating')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async updateJobListingApplicationRating(
+    @Param('jobId') jobId: string,
+    @Body('rating') rating: number,
+    @Body('userId') userId: string,
+  ) {
+    const success = await this.jobListingsService.updateJobListingApplicationRating(
+      userId,
+      jobId,
+      rating,
+    );
+
+    if (success) {
+      return {
+        message: 'Job listing application rating updated successfully',
+        data: [],
+        statusCode: 200,
+      };
+    }
+  }
 }
