@@ -14,12 +14,6 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  RequestPasswordResetDto,
-  ResetPasswordDto,
-  SignInDto,
-  SignUpDto,
-} from './dto/auth.dto';
 import { ImageValidationPipe } from '@/utils/pipes/image-validation-pipe';
 import { JwtAuthGuard } from './jwt/jwt.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
@@ -34,6 +28,10 @@ import { ForgotPasswordService } from './services/forgot-password.service';
 import { ResetPasswordService } from './services/reset-password.service';
 import { SignOutService } from './services/sign-out.service';
 import type { User } from '@/types';
+import { SignInDto } from './dto/sign-in.dto';
+import { SignUpDto } from './dto/sign-up.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -107,6 +105,7 @@ export class AuthController {
     @Ip() ipAddress: string,
   ) {
     const token = await this.signInService.signIn(dto, ipAddress);
+
     if (!token) {
       return res.json({
         statusCode: 400,
@@ -164,7 +163,7 @@ export class AuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   async requestPasswordReset(
-    @Body() { email }: RequestPasswordResetDto,
+    @Body() { email }: ForgotPasswordDto,
     @Headers('accept-language') acceptLanguage: string,
     @Ip() ipAddress: string,
     @Res() res: Response,

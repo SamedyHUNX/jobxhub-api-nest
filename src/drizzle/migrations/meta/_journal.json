@@ -162,6 +162,13 @@
       "when": 1739340060000,
       "tag": "0022_add_missing_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1772870509017,
+      "tag": "0023_striped_juggernaut",
+      "breakpoints": true
     }
   ]
 }

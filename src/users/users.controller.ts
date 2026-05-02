@@ -108,7 +108,6 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(ClassSerializerInterceptor)
   async updateNotificationSettings(@CurrentUser() user: User, @Body() updateNotificationSettingsDto: UpdateNotificationSettingsDto) {
-    console.log('data received', updateNotificationSettingsDto)
     const notificationSettings = await this.usersService.updateNotificationSettings(user, updateNotificationSettingsDto);
 
     return {

@@ -274,4 +274,74 @@ export class DatabaseUtilsService {
         return jobListings;
     }
 
+    createOrgUserSettings = async (userId: string, orgId: string) => {
+        await this.dbService.getDb()
+            .insert(OrganizationUserSettingsTable)
+            .values({
+                organizationId: orgId,
+                userId: userId,
+                role: 'MEMBER',
+            });
+    }
+
+    deleteOrgUserSettings = async (userId: string, orgId: string) => {
+        await this.dbService.getDb()
+            .delete(OrganizationUserSettingsTable)
+            .where(
+                and(
+                    eq(OrganizationUserSettingsTable.organizationId, orgId),
+                    eq(OrganizationUserSettingsTable.userId, userId)
+                )
+            );
+    }
+
+    getOrgUsersWithApplicationNotificationSettings = async (orgId: string) => {
+        const users = await this.dbService.getDb()
+            .select({
+                userId: UserNotificationSettingsTable.userId,
+                newJobEmailNotifications: UserNotificationSettingsTable.newJobEmailNotifications,
+                aiPrompt: UserNotificationSettingsTable.aiPrompt,
+                userEmail: UserTable.email,
+                userFirstName: UserTable.firstName,
+                userLastName: UserTable.lastName,
+            })
+            .from(UserNotificationSettingsTable)
+            .innerJoin(UserTable, eq(UserNotificationSettingsTable.userId, UserTable.id))
+            .where(eq(UserNotificationSettingsTable.newJobEmailNotifications, true));
+
+
+        return users;
+    }
+
+    getRecentApplications = async (orgId: string) => {
+        const applications = await this.dbService.getDb()
+            .select({
+                jobListingId: JobListingApplicationTable.jobListingId,
+                userId: JobListingApplicationTable.userId,
+                stage: JobListingApplicationTable.stage,
+                createdAt: JobListingApplicationTable.createdAt,
+            })
+            .from(JobListingApplicationTable)
+            .innerJoin(
+                JobListingTable,
+                eq(JobListingApplicationTable.jobListingId, JobListingTable.id)
+            )
+            .where(eq(JobListingTable.organizationId, orgId))
+            .orderBy(desc(JobListingApplicationTable.createdAt))
+            .limit(10);
+
+        return applications;
+    }
+
+    getJobListingApplication = async (userId: string, jobListingId: string) => {
+        const [application] = await this.dbService.getDb()
+            .select()
+            .from(JobListingApplicationTable)
+            .where(and(
+                eq(JobListingApplicationTable.jobListingId, jobListingId),
+                eq(JobListingApplicationTable.userId, userId)))
+            .limit(1);
+
+        return application;
+    }
 }

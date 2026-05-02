@@ -24,6 +24,7 @@ import { IdValidationPipe, ImageValidationPipe } from '@/utils/pipes/image-valid
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
 import type { User } from '@/types';
 import { UpdateOrganizationDto } from './dtos/update-organization.dto';
+import { UpdateOrgUserNotificationSettingsDto } from './dtos/update-org-user-notification-settings.dto';
 
 @Controller('organizations')
 export class OrganizationsController {
@@ -116,4 +117,29 @@ export class OrganizationsController {
     };
   }
 
+  // Get org notification settings
+  @Get('org/:orgId/notification-settings')
+  @UseGuards(JwtAuthGuard)
+  async getNotificationSettings(@Param('orgId', IdValidationPipe) orgId: string, @CurrentUser() user: User) {
+    const notificationSettings = await this.orgsService.getOrgUserNotificationSettings(user.id, orgId);
+
+    return {
+      message: 'Notification settings fetched successfully',
+      data: [notificationSettings],
+      statusCode: 200
+    };
+  }
+
+  // Update org notification settings
+  @Put('org/:orgId/notification-settings')
+  @UseGuards(JwtAuthGuard)
+  async updateNotificationSettings(@Param('orgId', IdValidationPipe) orgId: string, @CurrentUser() user: User, @Body() updateOrgNotificationSettingsDto: UpdateOrgUserNotificationSettingsDto) {
+    const notificationSettings = await this.orgsService.updateOrgUserNotificationSettings(user.id, orgId, updateOrgNotificationSettingsDto);
+
+    return {
+      message: 'Notification settings updated successfully',
+      data: [notificationSettings],
+      statusCode: 200
+    };
+  }
 }

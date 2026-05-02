@@ -29,6 +29,7 @@ import { AppPermissionService } from '@/permissions/services/app-permissions.ser
 import type { User } from '@/types';
 import { Permissions } from '@/permissions/utils/app-permissions';
 import { DatabaseUtilsService } from '@/common/services/database-utils.service';
+import { UpdateOrgUserNotificationSettingsDto } from '../dtos/update-org-user-notification-settings.dto';
 
 @Injectable()
 export class OrganizationsService {
@@ -403,5 +404,48 @@ export class OrganizationsService {
       this.logger.error(`Failed to update organization ${orgId}:`, error);
       throw error;
     }
+  };
+
+  getOrgUserNotificationSettings = async (userId: string, orgId: string) => {
+    const [orgNotificationSettings] = await this.dbService.getDb()
+      .select({
+        newApplicationEmailNotifications: OrganizationUserSettingsTable.newApplicationEmailNotifications,
+        minimumRating: OrganizationUserSettingsTable.minimumRating,
+      })
+      .from(OrganizationUserSettingsTable)
+      .where(
+        and(
+          eq(OrganizationUserSettingsTable.organizationId, orgId),
+          eq(OrganizationUserSettingsTable.userId, userId),
+        ),
+      );
+
+    if (!orgNotificationSettings) {
+      throw new NotFoundException(`Organization ${orgId} not found`);
+    }
+
+    return orgNotificationSettings;
+  };
+
+  updateOrgUserNotificationSettings = async (userId: string, orgId: string, updateOrgUserNotificationSettingsDto: UpdateOrgUserNotificationSettingsDto) => {
+    const orgNotificationSettings = await this.dbService.getDb()
+      .update(OrganizationUserSettingsTable)
+      .set({
+        newApplicationEmailNotifications: updateOrgUserNotificationSettingsDto.newApplicationEmailNotifications,
+        minimumRating: updateOrgUserNotificationSettingsDto.minimumRating,
+      })
+      .where(
+        and(
+          eq(OrganizationUserSettingsTable.organizationId, orgId),
+          eq(OrganizationUserSettingsTable.userId, userId),
+        ),
+      )
+      .returning();
+
+    if (!orgNotificationSettings) {
+      throw new NotFoundException(`Organization ${orgId} not found`);
+    }
+
+    return orgNotificationSettings;
   };
 }

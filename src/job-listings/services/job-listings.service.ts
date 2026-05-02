@@ -1,9 +1,9 @@
 import { DrizzleHealthService } from '@/drizzle/services/drizzle-health.service';
 import { ConflictException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { CreateJobListingApplicationDto, CreateJobListingDto, UpdateJobListingDto } from '../dto/job-listings.dto';
-import { JobListingApplicationTable, JobListingTable, OrganizationTable, UserResumeTable } from '@/drizzle/schema';
+import { JobListingApplicationTable, JobListingTable, OrganizationTable, UserResumeTable, UserTable } from '@/drizzle/schema';
 import { and, desc, eq, like, or, count, SQL, inArray } from 'drizzle-orm';
-import type { JobListing, User } from '@/types';
+import type { ApplicationStage, JobListing, User } from '@/types';
 import { AppPermissionService } from '@/permissions/services/app-permissions.service';
 import * as Sentry from '@sentry/nestjs';
 import { DatabaseUtilsService } from '@/common/services/database-utils.service';
@@ -11,6 +11,7 @@ import { InngestHealthService } from '@/inngest/services/inngest-health.service'
 import { S3HealthService } from '@/s3/services/s3-health.service';
 import { JobMatchingAgentService } from '@/agents/services/job-matching-agent.service';
 import { getLastOutputMessage } from '@/utils/agents';
+import console from 'console';
 
 @Injectable()
 export class JobListingsService {
@@ -324,6 +325,40 @@ export class JobListingsService {
     return applications
   }
 
+  // Get all job listing applications
+  getAllJobListingApplicationForOrgId = async (jobId: string) => {
+    const applications = await this.dbService.getDb()
+      .select({
+        coverLetter: JobListingApplicationTable.coverLetter,
+        createdAt: JobListingApplicationTable.createdAt,
+        updatedAt: JobListingApplicationTable.updatedAt,
+        jobListingId: JobListingApplicationTable.jobListingId,
+        userId: JobListingApplicationTable.userId,
+        stage: JobListingApplicationTable.stage,
+        id: JobListingApplicationTable.jobListingId,
+        rating: JobListingApplicationTable.rating,
+        user: {
+          id: UserTable.id,
+          username: UserTable.username,
+          imageUrl: UserTable.imageUrl,
+          firstName: UserTable.firstName,
+          lastName: UserTable.lastName,
+          email: UserTable.email,
+          phoneNumber: UserTable.phoneNumber,
+        },
+        resume: {
+          resumeFileUrl: UserResumeTable.resumeFileKey,
+          aiSummary: UserResumeTable.aiSummary
+        }
+      })
+      .from(JobListingApplicationTable)
+      .where(eq(JobListingApplicationTable.jobListingId, jobId))
+      .leftJoin(UserTable, eq(JobListingApplicationTable.userId, UserTable.id))
+      .leftJoin(UserResumeTable, eq(JobListingApplicationTable.userId, UserResumeTable.userId))
+
+    return applications
+  }
+
   // Create job listing application
   createJobListingApplication = async (userId: string, jobId: string, dto: CreateJobListingApplicationDto) => {
     const [jobListing, userResume, existingApplication] = await Promise.all([
@@ -446,5 +481,37 @@ export class JobListingsService {
     }
 
     return matchedListings
+  }
+
+  updateJobListingApplicationStage = async (userId: string, jobId: string, stage: ApplicationStage) => {
+    console.log(userId, jobId, stage)
+    const existingApplication = await this.dbUtilsService.getJobListingApplication(userId, jobId)
+    console.log(existingApplication)
+
+    if (!existingApplication) {
+      throw new NotFoundException('Job listing application not found')
+    }
+
+    await this.dbService.getDb()
+      .update(JobListingApplicationTable)
+      .set({ stage })
+      .where(and(eq(JobListingApplicationTable.userId, userId), eq(JobListingApplicationTable.jobListingId, jobId)))
+
+    return true
+  }
+
+  updateJobListingApplicationRating = async (userId: string, jobId: string, rating: number) => {
+    const existingApplication = await this.dbUtilsService.getJobListingApplication(userId, jobId)
+
+    if (!existingApplication) {
+      throw new NotFoundException('Job listing application not found')
+    }
+
+    await this.dbService.getDb()
+      .update(JobListingApplicationTable)
+      .set({ rating })
+      .where(and(eq(JobListingApplicationTable.userId, userId), eq(JobListingApplicationTable.jobListingId, jobId)))
+
+    return true
   }
 }

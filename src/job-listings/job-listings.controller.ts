@@ -2,13 +2,10 @@ import {
   Body,
   Controller,
   Delete,
-  FileTypeValidator,
   Get,
   HttpCode,
   HttpStatus,
-  MaxFileSizeValidator,
   Param,
-  ParseFilePipe,
   Post,
   Put,
   Query,
@@ -21,10 +18,10 @@ import { JwtAuthGuard } from '@/auth/jwt/jwt.guard';
 import { CreateJobListingApplicationDto, CreateJobListingDto, UpdateJobListingDto } from './dto/job-listings.dto';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { User } from '@/types';
+import type { ApplicationStage, User } from '@/types';
 import { SelectedOrgId } from '@/decorators/select-org-id.decorator';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { ResumeValidationPipe } from '@/utils/pipes/image-validation-pipe';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('job-listings')
 @Controller('job-listings')
@@ -163,7 +160,7 @@ export class JobListingsController {
     }
   }
 
-  // Get job listing application
+  // Get Own job listing application
   @Get('/application/:jobId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
@@ -179,6 +176,23 @@ export class JobListingsController {
     return {
       message: 'Job listing application fetched successfully',
       data: application,
+      statusCode: 200,
+    };
+  }
+
+  // Get all job listing application
+  @Get('/applications/:jobId')
+  @HttpCode(HttpStatus.OK)
+  async getAllJobListingApplicationForOrgId(
+    @Param('jobId') jobId: string,
+  ) {
+    const applications = await this.jobListingsService.getAllJobListingApplicationForOrgId(
+      jobId,
+    );
+
+    return {
+      message: 'Job listing applications fetched successfully',
+      data: applications,
       statusCode: 200,
     };
   }
@@ -275,5 +289,53 @@ export class JobListingsController {
       data: jobListings,
       statusCode: 200,
     };
+  }
+
+  // Update job listing application stage
+  @Put('/application/:jobId/stage')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async updateJobListingApplicationStage(
+    @Param('jobId') jobId: string,
+    @Body('stage') stageValue: ApplicationStage,
+    @Body('userId') userId: string,
+  ) {
+    const success = await this.jobListingsService.updateJobListingApplicationStage(
+      userId,
+      jobId,
+      stageValue,
+    );
+
+    if (success) {
+      return {
+        message: 'Job listing application stage updated successfully',
+        data: [],
+        statusCode: 200,
+      };
+    }
+  }
+
+  // Update job listing application rating
+  @Put('/application/:jobId/rating')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async updateJobListingApplicationRating(
+    @Param('jobId') jobId: string,
+    @Body('rating') rating: number,
+    @Body('userId') userId: string,
+  ) {
+    const success = await this.jobListingsService.updateJobListingApplicationRating(
+      userId,
+      jobId,
+      rating,
+    );
+
+    if (success) {
+      return {
+        message: 'Job listing application rating updated successfully',
+        data: [],
+        statusCode: 200,
+      };
+    }
   }
 }

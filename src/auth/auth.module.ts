@@ -39,6 +39,15 @@ import { PermissionsModule } from '@/permissions/permissions.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [JwtStrategy, SignUpService, SignInService, VerifyEmailService, ForgotPasswordService, ResetPasswordService, SignOutService, ValidateUserService],
+  providers: [
+    JwtStrategy,
+    SignUpService,
+    SignInService,
+    VerifyEmailService,
+    ForgotPasswordService,
+    ResetPasswordService,
+    SignOutService,
+    ValidateUserService
+  ],
 })
 export class AuthModule { }

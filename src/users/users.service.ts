@@ -198,7 +198,7 @@ export class UsersService {
     const [notificationSettings] = await this.dbService.db
       .select({
         aiPrompt: UserNotificationSettingsTable.aiPrompt,
-        newJobEmailNotification: UserNotificationSettingsTable.newJobEmailNotifications,
+        newJobEmailNotifications: UserNotificationSettingsTable.newJobEmailNotifications,
       })
       .from(UserNotificationSettingsTable)
       .where(eq(UserNotificationSettingsTable.userId, user.id))

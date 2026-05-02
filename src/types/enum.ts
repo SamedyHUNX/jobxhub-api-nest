@@ -48,6 +48,7 @@ export const jobListingTypeEnum = pgEnum('job_listings_type', jobListingTypes);
 export const applicationStages = [
     'denied',
     'applied',
+    'interested',
     'interviewed',
     'hired',
 ] as const;

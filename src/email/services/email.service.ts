@@ -394,6 +394,63 @@ export class EmailService {
         }
     }
 
+    async sendDailyApplicationEmail(params: {
+        to: string;
+        firstName: string;
+        lastName: string;
+        applications: { jobListingId: string; userId: string; stage: string; createdAt: Date | string }[];
+    }) {
+        const { to, firstName, lastName, applications } = params;
+        const greeting = firstName ? `Hi ${firstName} ${lastName}` : 'Hi there';
+
+        const applicationsHtml = applications
+            .map(
+                (app) => `
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #eee;">
+              <strong style="color: #333;">Job ID: ${app.jobListingId}</strong><br>
+              <span style="color: #666; font-size: 13px;">Stage: ${app.stage}</span><br>
+              <span style="color: #999; font-size: 12px;">Applied: ${new Date(app.createdAt).toLocaleDateString()}</span>
+            </td>
+          </tr>`,
+            )
+            .join('');
+
+        const mailOptions = {
+            from: this.configService.emailFrom,
+            to,
+            subject: `📋 ${applications.length} New Application${applications.length > 1 ? 's' : ''} for Your Organization`,
+            html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #333;">Daily Application Digest</h1>
+          <p>${greeting},</p>
+          <p>Here is a summary of recent applications for your organization:</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            ${applicationsHtml}
+          </table>
+          <p style="color: #666; font-size: 12px;">
+            You're receiving this because you have daily application notifications enabled.
+            You can update your notification preferences in your account settings.
+          </p>
+        </div>
+      `,
+        };
+
+        try {
+            this.logger.log(`Sending daily application email to: ${to}`);
+            const result = await this.transporter.sendMail(mailOptions);
+            this.logger.log(`Daily application email sent successfully to: ${to}. MessageId: ${result.messageId}`);
+            return result;
+        } catch (error: any) {
+            this.logger.error(`Failed to send daily application email to: ${to}`, error?.stack || error);
+            Sentry.captureException(error, {
+                tags: { operation: 'send_daily_application_email' },
+                extra: { to, errorMessage: error?.message },
+            });
+            throw error;
+        }
+    }
+
     /**
      * Test method to verify email service is working
      * This can be called to diagnose email sending issues

@@ -11,6 +11,8 @@ export class EmailFunctions implements OnModuleInit {
     private readonly logger = new Logger(EmailFunctions.name);
     private prepareDailyUserJobListingNotifications;
     private sendDailyJobListingEmailToUser;
+    private prepareDailyOrganizationUserApplicationNotifications;
+    private sendDailyApplicationEmailToUser;
 
     constructor(
         private readonly inngestService: InngestHealthService,
@@ -53,7 +55,7 @@ export class EmailFunctions implements OnModuleInit {
                             jobListings,
                         },
                     })),
-                ); // TODO
+                );
 
                 this.logger.log(`Dispatched ${userNotifications.length} daily job listing emails.`);
                 return { dispatched: userNotifications.length };
@@ -121,9 +123,137 @@ export class EmailFunctions implements OnModuleInit {
                 }
             }
         );
+
+        // Orchestrator: fetches recent applications for an org and fans out one event per user
+        this.prepareDailyOrganizationUserApplicationNotifications = this.inngestService.getInngest().createFunction(
+            { id: 'jobxhub/prepare-daily-organization-user-application-notifications', name: 'JobXHub - Prepare Daily Organization User Application Notifications' },
+            { event: 'jobxhub/prepare-daily-organization-user-application-notifications' },
+            async ({ event, step }) => {
+                const { organizationId } = event.data;
+
+                const [users, applications] = await Promise.all([
+                    step.run('get-org-users', async () => {
+                        return await this.dbUtilsService.getOrgUsersWithApplicationNotificationSettings(organizationId);
+                    }),
+                    step.run('get-recent-applications', async () => {
+                        return await this.dbUtilsService.getRecentApplications(organizationId);
+                    }),
+                ]);
+
+                if (!users?.length) {
+                    this.logger.log('No users found, skipping daily notifications');
+                    return { skipped: true };
+                }
+
+                if (!applications?.length) {
+                    this.logger.log('No applications found, skipping daily notifications');
+                    return { skipped: true };
+                }
+
+                // Build a lookup map: userId -> user notification settings
+                const userMap = new Map(users.map(u => [u.userId, u]));
+
+                // Group applications by userId (only those who opted in)
+                const groupedApplications = applications.reduce<Record<string, typeof applications>>((acc, application) => {
+                    if (!userMap.has(application.userId)) return acc; // user hasn't opted in
+                    if (!acc[application.userId]) {
+                        acc[application.userId] = [];
+                    }
+                    acc[application.userId].push(application);
+                    return acc;
+                }, {});
+
+                // Fan out: one event per user, each with only their relevant applications
+                const events = Object.entries(groupedApplications)
+                    .map(([userId, userApplications]) => {
+                        const user = userMap.get(userId);
+                        if (!user) return null;
+
+                        return {
+                            name: 'jobxhub/email.send-daily-application' as const,
+                            data: {
+                                userId,
+                                userEmail: user.userEmail,
+                                userFirstName: user.userFirstName,
+                                userLastName: user.userLastName,
+                                applications: userApplications,
+                            },
+                        };
+                    })
+                    .filter((e): e is NonNullable<typeof e> => e !== null);
+
+                if (!events.length) {
+                    this.logger.log('No matched user-application pairs, skipping dispatch');
+                    return { skipped: true };
+                }
+
+                await step.sendEvent('dispatch-daily-application-emails', events);
+
+                this.logger.log(`Dispatched ${events.length} daily application notification emails.`);
+                return { dispatched: events.length };
+            }
+        );
+
+        // Worker: sends the daily application summary email to a single user
+        this.sendDailyApplicationEmailToUser = this.inngestService.getInngest().createFunction(
+            {
+                id: 'jobxhub/email.send-daily-application',
+                name: 'JobXHub - Send Daily Application Email To User',
+                throttle: {
+                    limit: 1000,
+                    period: '1m',
+                },
+            },
+            { event: 'jobxhub/email.send-daily-application' },
+            async ({ event, step }) => {
+                const { userId, userEmail, userFirstName, userLastName, applications } = event.data;
+
+                if (!applications?.length) return { skipped: true };
+
+                try {
+                    await step.run('send-daily-application-email', async () => {
+                        this.logger.log(`Sending daily application notification to userId: ${userId} (${userEmail})`);
+
+                        await this.emailService.sendDailyApplicationEmail({
+                            to: userEmail,
+                            firstName: userFirstName,
+                            lastName: userLastName,
+                            applications,
+                        });
+
+                        this.logger.log(`Daily application email sent successfully to userId: ${userId}`);
+                        return { emailSent: true };
+                    });
+
+                    return { success: true, userId };
+                } catch (error: any) {
+                    this.logger.error(
+                        `Failed to send daily application notification to userId: ${userId}`,
+                        error?.stack || error,
+                    );
+                    Sentry.captureException(error, {
+                        tags: {
+                            operation: 'inngest_send_daily_application_email',
+                            function: 'send-daily-application',
+                        },
+                        extra: {
+                            userId,
+                            userEmail,
+                            errorMessage: error?.message,
+                        },
+                    });
+                    throw error; // Throw so that Inngest specifically retries this run
+                }
+            }
+        );
     }
 
     getFunctions() {
-        return [this.prepareDailyUserJobListingNotifications, this.sendDailyJobListingEmailToUser];
+        return [
+            this.prepareDailyUserJobListingNotifications,
+            this.sendDailyJobListingEmailToUser,
+            this.prepareDailyOrganizationUserApplicationNotifications,
+            this.sendDailyApplicationEmailToUser,
+        ];
     }
 }

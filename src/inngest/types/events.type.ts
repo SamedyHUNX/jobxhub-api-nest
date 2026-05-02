@@ -1,5 +1,3 @@
-import { JobListingTable } from "@/drizzle/schema";
-
 export type UserCreatedData = {
   userId: string;
   email: string;
@@ -84,5 +82,17 @@ export type Events = {
       aiPrompt?: string | null;
       jobListings: { id: string; title: string; organizationName: string }[];
     };
-  }
+  };
+  'jobxhub/org-membership.created': {
+    data: {
+      orgId: string;
+      userId: string;
+    }
+  };
+  'jobxhub/org-membership.deleted': {
+    data: {
+      orgId: string;
+      userId: string;
+    }
+  };
 };
