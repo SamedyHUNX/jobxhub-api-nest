@@ -336,6 +336,7 @@ export class JobListingsService {
         userId: JobListingApplicationTable.userId,
         stage: JobListingApplicationTable.stage,
         id: JobListingApplicationTable.jobListingId,
+        rating: JobListingApplicationTable.rating,
         user: {
           id: UserTable.id,
           username: UserTable.username,
