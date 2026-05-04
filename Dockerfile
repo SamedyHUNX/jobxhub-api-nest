@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production && \
+RUN npm ci --only=production --legacy-peer-deps && \
     cp -R node_modules /tmp/node_modules && \
     npm ci
 
