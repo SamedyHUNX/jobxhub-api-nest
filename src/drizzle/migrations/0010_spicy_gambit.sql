@@ -1,1 +1,0 @@
-ALTER TABLE "organization_user_settings" ALTER COLUMN "role" SET DEFAULT 'MEMBER';

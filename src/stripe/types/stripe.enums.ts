@@ -6,6 +6,7 @@ export const statusEnum = pgEnum('stripe_subscription_status', [
 ]);
 export const planEnum = pgEnum('stripe_subscription_plan', ['basic', 'growth', 'enterprise']);
 const plans = ['basic', 'growth', 'enterprise'] as const;
+
 export type SubscriptionPlanName = typeof plans[number];
 
 export type SubscriptionInterval = typeof intervalEnum.enumValues[number]; // 'month' | 'year'
