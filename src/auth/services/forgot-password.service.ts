@@ -40,7 +40,7 @@ export class ForgotPasswordService {
                     `Too many password reset requests from IP: ${ipAddress}`,
                 );
 
-                // Add artificial delay before throwing to prevent timing analysis
+                // Add artificial delay before throwing to prevent timing analysis //
                 await this.rateLimitCacheService.addConstantTimeDelay(startTime);
 
                 throw new HttpException(
