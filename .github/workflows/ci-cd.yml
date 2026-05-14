@@ -95,5 +95,6 @@ jobs:
             docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
             docker stop jobxhub-api || true
             docker rm jobxhub-api || true
-            docker run -d -p 4000:4000 --name jobxhub-api --restart unless-stopped \
+            docker run -d -p 9000:9000 --name jobxhub-api --restart unless-stopped \
+              --env-file /home/ubuntu/backend.env \
               ghcr.io/${{ env.IMAGE_NAME }}:latest
