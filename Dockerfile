@@ -38,7 +38,7 @@ COPY --from=deps /tmp/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 
 # Expose port
-EXPOSE 3000
+EXPOSE 9000
 
 # Run the application
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]
