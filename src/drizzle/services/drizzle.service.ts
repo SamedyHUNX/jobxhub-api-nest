@@ -21,7 +21,7 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
       password: this.configService.dbPassword || 'postgres',
       database: this.configService.dbName || 'mydb',
       ssl: sslEnabled
-        ? { rejectUnauthorized: this.configService.isProduction }
+        ? { rejectUnauthorized: false }
         : false,
     });
 
