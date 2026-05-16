@@ -1,7 +1,6 @@
 import { ConfigService } from '@/common/services/config.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Inngest } from 'inngest';
-import { Events } from '../types/events.type';
 
 @Injectable()
 export class InngestClientService {
@@ -17,7 +16,6 @@ export class InngestClientService {
 
     this.inngest = new Inngest({
       id: 'jobxhub',
-      schemas: {} as Events,
       eventKey: eventKey,
       signingKey: signingKey,
     });
