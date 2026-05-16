@@ -50,9 +50,14 @@ async function bootstrap() {
   // Use Cookie Parser
   app.use(cookieParser());
   // Enable CORS
+  // Enable CORS
   app.enableCors({
-    origin: true,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    origin: clientUrls.length > 0 ? clientUrls : [
+      'https://jobxhub.com',
+      'https://www.jobxhub.com',
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,
   });
   // Start the server
