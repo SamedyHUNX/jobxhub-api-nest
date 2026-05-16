@@ -44,6 +44,7 @@ type WebhookData<T> = {
 };
 
 export type Events = {
+  
   'jobxhub/user.created': {
     data: UserCreatedData;
   };

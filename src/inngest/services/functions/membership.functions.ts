@@ -16,8 +16,7 @@ export class MembershipFunctions implements OnModuleInit {
 
     onModuleInit() {
         this.createOrgMembership = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/create-org-user-settings', name: 'JobXHub - Create Org User Settings' },
-            { event: 'jobxhub/org-membership.created' },
+            { id: 'jobxhub/create-org-user-settings', name: 'JobXHub - Create Org User Settings', triggers: [{ event: 'jobxhub/org-membership.created' }] },
             async ({ event, step }) => {
                 const { orgId, userId } = event.data;
                 await step.run('create-org-user-settings', async () => {
@@ -28,8 +27,7 @@ export class MembershipFunctions implements OnModuleInit {
         );
 
         this.deleteOrgMembership = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/delete-org-user-settings', name: 'JobXHub - Delete Org User Settings' },
-            { event: 'jobxhub/org-membership.deleted' },
+            { id: 'jobxhub/delete-org-user-settings', name: 'JobXHub - Delete Org User Settings', triggers: [{ event: 'jobxhub/org-membership.deleted' }] },
             async ({ event, step }) => {
                 const { orgId, userId } = event.data;
                 await step.run('delete-org-user-settings', async () => {

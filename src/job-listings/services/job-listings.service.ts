@@ -336,7 +336,6 @@ export class JobListingsService {
         userId: JobListingApplicationTable.userId,
         stage: JobListingApplicationTable.stage,
         id: JobListingApplicationTable.jobListingId,
-        rating: JobListingApplicationTable.rating,
         user: {
           id: UserTable.id,
           username: UserTable.username,
@@ -486,7 +485,6 @@ export class JobListingsService {
   updateJobListingApplicationStage = async (userId: string, jobId: string, stage: ApplicationStage) => {
     console.log(userId, jobId, stage)
     const existingApplication = await this.dbUtilsService.getJobListingApplication(userId, jobId)
-    console.log(existingApplication)
 
     if (!existingApplication) {
       throw new NotFoundException('Job listing application not found')

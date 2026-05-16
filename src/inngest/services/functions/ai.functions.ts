@@ -25,8 +25,7 @@ export class AiFunctions implements OnModuleInit {
         });
 
         this.createAiSummaryOfUploadedResume = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/create-ai-summary-of-uploaded-resume', name: 'JobXHub - Create AI Summary of Uploaded Resume' },
-            { event: 'jobxhub/resume.uploaded' },
+            { id: 'jobxhub/create-ai-summary-of-uploaded-resume', name: 'JobXHub - Create AI Summary of Uploaded Resume', triggers: [{ event: 'jobxhub/resume.uploaded' }] },
             async ({ event, step }) => {
                 const { userId } = event.data;
 
@@ -76,8 +75,7 @@ export class AiFunctions implements OnModuleInit {
         );
 
         this.rankApplication = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/rank-application', name: 'JobXHub - Rank Application' },
-            { event: 'jobxhub/job_listing_application.created' },
+            { id: 'jobxhub/rank-application', name: 'JobXHub - Rank Application', triggers: [{ event: 'jobxhub/job_listing_application.created' }] },
             async ({ event, step }) => {
                 const { userId, jobId } = event.data;
 

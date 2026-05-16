@@ -23,8 +23,7 @@ export class EmailFunctions implements OnModuleInit {
 
     onModuleInit() {
         this.prepareDailyUserJobListingNotifications = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/email.prepare-daily-user-job-listings', name: 'JobXHub - Prepare Daily User Job Listing Notifications' },
-            { event: 'jobxhub/email.prepare-daily-user-job-listings' },
+            { id: 'jobxhub/email.prepare-daily-user-job-listings', name: 'JobXHub - Prepare Daily User Job Listing Notifications', triggers: [{ event: 'jobxhub/email.prepare-daily-user-job-listings' }] },
             async ({ event, step }) => {
                 // Step 1: Fetch users with email notifications enabled and recent job listings in parallel
                 const [userNotifications, jobListings] = await Promise.all([
@@ -67,9 +66,9 @@ export class EmailFunctions implements OnModuleInit {
                 id: 'jobxhub/email.send-daily-job-listing', name: 'JobXHub - Send Daily Job Listing Email To User', throttle: {
                     limit: 10,
                     period: '1m'
-                }
+                },
+                triggers: [{ event: 'jobxhub/email.send-daily-job-listing' }]
             },
-            { event: 'jobxhub/email.send-daily-job-listing' },
             async ({ event, step }) => {
                 const { userId, userEmail, userFirstName, userLastName, aiPrompt, jobListings } = event.data;
 
@@ -126,8 +125,7 @@ export class EmailFunctions implements OnModuleInit {
 
         // Orchestrator: fetches recent applications for an org and fans out one event per user
         this.prepareDailyOrganizationUserApplicationNotifications = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/prepare-daily-organization-user-application-notifications', name: 'JobXHub - Prepare Daily Organization User Application Notifications' },
-            { event: 'jobxhub/prepare-daily-organization-user-application-notifications' },
+            { id: 'jobxhub/prepare-daily-organization-user-application-notifications', name: 'JobXHub - Prepare Daily Organization User Application Notifications', triggers: [{ event: 'jobxhub/prepare-daily-organization-user-application-notifications' }] },
             async ({ event, step }) => {
                 const { organizationId } = event.data;
 
@@ -203,8 +201,8 @@ export class EmailFunctions implements OnModuleInit {
                     limit: 1000,
                     period: '1m',
                 },
+                triggers: [{ event: 'jobxhub/email.send-daily-application' }],
             },
-            { event: 'jobxhub/email.send-daily-application' },
             async ({ event, step }) => {
                 const { userId, userEmail, userFirstName, userLastName, applications } = event.data;
 

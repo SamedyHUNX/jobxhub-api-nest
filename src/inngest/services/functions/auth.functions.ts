@@ -16,8 +16,7 @@ export class AuthFunctions implements OnModuleInit {
 
     onModuleInit() {
         this.createUserFn = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/create-db-user', name: 'JobXHub - Create DB User' },
-            { event: 'jobxhub/user.created' },
+            { id: 'jobxhub/create-db-user', name: 'JobXHub - Create DB User', triggers: [{ event: 'jobxhub/user.created' }] },
             async ({ event, step }) => {
                 const { userId, email, acceptLanguage, verificationUrl } = event.data;
 
@@ -59,8 +58,7 @@ export class AuthFunctions implements OnModuleInit {
             },
         );
         this.forgotPasswordFn = this.inngestService.getInngest().createFunction(
-            { id: 'jobxhub/user.reset_password', name: 'JobXHub - Handle Password Reset Request' },
-            { event: 'jobxhub/user.reset_password' },
+            { id: 'jobxhub/user.reset_password', name: 'JobXHub - Handle Password Reset Request', triggers: [{ event: 'jobxhub/user.reset_password' }] },
             async ({ event, step }) => {
                 const { email, resetUrl, acceptLanguage } = event.data;
 
