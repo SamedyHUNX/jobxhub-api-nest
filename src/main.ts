@@ -14,43 +14,12 @@ async function bootstrap() {
     logger: WinstonModule.createLogger(createWinstonConfig()),
     rawBody: true,
   });
+
   // To access the ConfigService (Environment Variables)
   const configService = app.get(ConfigService);
   const clientUrls = configService.get<string>('CLIENT_URLS')?.split(',') || [];
 
-  // API Documentation
-  const config = new DocumentBuilder()
-    .setTitle("JobXHub's API")
-    .setDescription('API description')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-
-  // Create Swagger Document
-  const document = SwaggerModule.createDocument(app, config);
-  // Setup Swagger UI
-  SwaggerModule.setup('api', app, document);
-
-  // Global Validation Pipe
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      exceptionFactory(errors) {
-        const messages = errors.map(
-          (err) => `${err.property} - ${Object.values(err.constraints || {}).join(', ')}`
-        )
-        return new BadRequestException(messages)
-      },
-    }),
-  );
-
-  // Set Global Prefix
-  app.setGlobalPrefix('api');
-  // Use Cookie Parser
-  app.use(cookieParser());
-  // Enable CORS
-  // Enable CORS
+  // 1. Enable CORS first — must be before any middleware, guards, or pipes
   app.enableCors({
     origin: clientUrls.length > 0 ? clientUrls : [
       'https://jobxhub.com',
@@ -60,9 +29,42 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,
   });
-  // Start the server
+
+  // 2. Core middleware
+  app.use(cookieParser());
+
+  // 3. Global prefix
+  app.setGlobalPrefix('api');
+
+  // 4. Global pipes
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      exceptionFactory(errors) {
+        const messages = errors.map(
+          (err) => `${err.property} - ${Object.values(err.constraints || {}).join(', ')}`
+        );
+        return new BadRequestException(messages);
+      },
+    }),
+  );
+
+  // 5. API Documentation (Swagger) — last, it's just a UI
+  const config = new DocumentBuilder()
+    .setTitle("JobXHub's API")
+    .setDescription('API description')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
+  // 6. Start the server
   await app.listen(configService.port);
 }
+
 bootstrap().catch((err) => {
   console.error('Error during application bootstrap:', err);
   process.exit(1);
