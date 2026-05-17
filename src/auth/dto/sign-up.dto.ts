@@ -33,8 +33,9 @@ export class SignUpDto {
     @IsNotEmpty()
     lastName: string;
 
-    @IsDateString()
+    @IsString()
     @IsNotEmpty()
+    @IsDateString()
     dateOfBirth: string;
 
     @IsString()
